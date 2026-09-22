@@ -9,6 +9,7 @@ source "$SCRIPT_DIR/../common/functions.sh" || { echo "Error: failed to load com
 require_root
 
 LOCAL_CADDYFILE="$SCRIPT_DIR/Caddyfile.local"
+STATE_FILE="$SCRIPT_DIR/state.json"
 CADDY_CONTAINER_NAME="caddy"
 DOMAIN="marx.home"
 CORE_SCRIPT="$SCRIPT_DIR/generate_caddyfile_core.py"
@@ -166,10 +167,15 @@ for i in $(seq 0 $((TOTAL - 1))); do
     echo "$guests_updated" > "$GUESTS_JSON"
 done
 
-# --- Resolve entries and render the Caddyfile via the Python core ---
+# --- Merge guests into state, then render the Caddyfile via the core ---
 REAL_PYTHON3=$(resolve_real_python3 || true)
 if [ -z "$REAL_PYTHON3" ]; then
     log_error "python3 not found. Install Python 3 (e.g. apt install python3) to run $CORE_SCRIPT."
+    exit 1
+fi
+
+if ! "$REAL_PYTHON3" "$CORE_SCRIPT" sync --domain "$DOMAIN" --state "$STATE_FILE" --guests-file "$GUESTS_JSON"; then
+    log_error "Failed to resolve Caddy entries."
     exit 1
 fi
 
@@ -177,8 +183,8 @@ echo ""
 log_step "Writing $LOCAL_CADDYFILE"
 echo ""
 
-if ! "$REAL_PYTHON3" "$CORE_SCRIPT" --domain "$DOMAIN" --saved-file "$LOCAL_CADDYFILE" --guests-file "$GUESTS_JSON" > "$TMP_CADDYFILE"; then
-    log_error "Failed to resolve Caddy entries."
+if ! "$REAL_PYTHON3" "$CORE_SCRIPT" render --state "$STATE_FILE" > "$TMP_CADDYFILE"; then
+    log_error "Failed to render Caddyfile."
     exit 1
 fi
 cat "$TMP_CADDYFILE" > "$LOCAL_CADDYFILE"
