@@ -29,6 +29,7 @@ done
 log_step "Starting CasaOS installation/configuration via LXC container..."
 
 # 1. ENSURE CasaOS is installed
+# shellcheck disable=SC2016  # evaluated later via 'bash -c'
 CASAOS_INSTALL_CMD='bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/casaos.sh)"'
 container_id=$(ensure_container_installed "casaos" "$CASAOS_INSTALL_CMD") || exit 1
 

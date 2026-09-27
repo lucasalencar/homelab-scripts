@@ -63,7 +63,7 @@ fi
 # --- Stop VM gracefully ---
 log_step "Shutting down VM $HA_VMID..."
 if qm shutdown "$HA_VMID" --timeout 60 2>/dev/null; then
-    for i in $(seq 1 30); do
+    for _ in $(seq 1 30); do
         qm status "$HA_VMID" 2>/dev/null | grep -q "stopped" && break
         sleep 2
     done

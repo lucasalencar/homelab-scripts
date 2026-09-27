@@ -3,8 +3,11 @@
 # IOMMU allows direct access of PCIe devices (e.g., GPU) to virtual machines,
 # improving performance for tasks like GPU passthrough.
 
+set -euo pipefail
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../common/functions.sh"
+# shellcheck source=../../common/functions.sh
+source "$SCRIPT_DIR/../../common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
 
 require_root
 

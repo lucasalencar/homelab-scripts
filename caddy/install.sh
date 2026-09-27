@@ -7,6 +7,7 @@ require_root
 
 log_step "Starting Caddy installation/configuration via LXC container..."
 
+# shellcheck disable=SC2016  # evaluated later via 'bash -c'
 CADDY_INSTALL_CMD='bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/caddy.sh)"'
 container_id=$(ensure_container_installed "caddy" "$CADDY_INSTALL_CMD") || exit 1
 

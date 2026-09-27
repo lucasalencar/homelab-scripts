@@ -8,6 +8,7 @@ require_root
 log_step "Starting qBittorrent installation/configuration..."
 
 # 1. Install container via community script
+# shellcheck disable=SC2016  # evaluated later via 'bash -c'
 INSTALL_CMD='bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/qbittorrent.sh)"'
 container_id=$(ensure_container_installed "qbittorrent" "$INSTALL_CMD") || exit 1
 

@@ -36,10 +36,10 @@ declare -A IP_MAP
 if [ -f "$LOCAL_CADDYFILE" ]; then
     log_info "Loading existing configuration from $LOCAL_CADDYFILE..."
     while IFS= read -r line; do
-        if [[ $line =~ http://([^.]+)\.$DOMAIN[[:space:]]*\{ ]]; then
+        if [[ $line =~ http://([^.]+)\.${DOMAIN}[[:space:]]*\{ ]]; then
             current_name="${BASH_REMATCH[1]}"
             TLS_MAP["$current_name"]="http"
-        elif [[ $line =~ ([^.]+)\.$DOMAIN[[:space:]]*\{ ]]; then
+        elif [[ $line =~ ([^.]+)\.${DOMAIN}[[:space:]]*\{ ]]; then
             current_name="${BASH_REMATCH[1]}"
             TLS_MAP["$current_name"]="https"
         elif [[ $line =~ reverse_proxy[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+):([0-9]+) ]]; then
@@ -124,7 +124,7 @@ prompt_tls() {
     local default_tls="http"
     [[ "$tls_name" == nextcloud* ]] && default_tls="https"
     local tls_choice=""
-    read -p "  HTTPS (tls internal) for $tls_name.$DOMAIN? [Y/n] (default: $([ "$default_tls" = "https" ] && echo "Y" || echo "n")): " tls_choice
+    read -r -p "  HTTPS (tls internal) for $tls_name.$DOMAIN? [Y/n] (default: $([ "$default_tls" = "https" ] && echo "Y" || echo "n")): " tls_choice
     case "${tls_choice,,}" in
         y|yes) TLS_MAP["$tls_name"]="https" ;;
         n|no)  TLS_MAP["$tls_name"]="http" ;;
@@ -254,7 +254,7 @@ for i in $(seq 0 $((TOTAL - 1))); do
     # Guests listening on several ports can expose one subdomain per service
     multi="n"
     if [ "$port_count" -gt 1 ]; then
-        read -p "  Does $name host multiple services (one subdomain per port)? [y/N]: " multi_choice
+        read -r -p "  Does $name host multiple services (one subdomain per port)? [y/N]: " multi_choice
         case "${multi_choice,,}" in
             y|yes) multi="y" ;;
         esac
@@ -267,10 +267,10 @@ for i in $(seq 0 $((TOTAL - 1))); do
             [ -z "$svc_port" ] && continue
             suggestion=$(suggest_subdomain_for_port "$svc_port")
             if [ -n "$suggestion" ]; then
-                read -p "  Subdomain for $name port $svc_port ($ip) [default: $suggestion]: " svc_name
+                read -r -p "  Subdomain for $name port $svc_port ($ip) [default: $suggestion]: " svc_name
                 svc_name="${svc_name:-$suggestion}"
             else
-                read -p "  Subdomain for $name port $svc_port ($ip) [empty to skip]: " svc_name
+                read -r -p "  Subdomain for $name port $svc_port ($ip) [empty to skip]: " svc_name
             fi
             svc_name=$(echo "$svc_name" | tr -d '[:space:]' | cut -d. -f1)
             [ -z "$svc_name" ] && continue
@@ -308,7 +308,7 @@ for i in $(seq 0 $((TOTAL - 1))); do
         fi
     fi
 
-    read -p "  Port for $name.$DOMAIN ($ip) [default: $suggested]: " user_port
+    read -r -p "  Port for $name.$DOMAIN ($ip) [default: $suggested]: " user_port
     port="${user_port:-$suggested}"
     if ! [[ "$port" =~ ^[0-9]+$ ]]; then
         log_warning "  Invalid port '$port' — using $suggested"

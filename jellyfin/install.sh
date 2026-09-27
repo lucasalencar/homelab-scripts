@@ -7,6 +7,7 @@ source "$SCRIPT_DIR/../common/functions.sh"
 log_step "Starting Jellyfin installation/configuration via LXC container..."
 
 # 1. Ensure Jellyfin is installed
+# shellcheck disable=SC2016  # evaluated later via 'bash -c'
 JELLYFIN_INSTALL_CMD='bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/jellyfin.sh)"'
 container_id=$(ensure_container_installed "jellyfin" "$JELLYFIN_INSTALL_CMD") || exit 1
 

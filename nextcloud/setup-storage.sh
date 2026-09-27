@@ -84,7 +84,7 @@ log_step "Ensuring temporary directory exists..."
 pct exec "$container_id" -- mkdir -p "${data_dir}/tmp" 2>/dev/null || true
 
 log_step "Waiting for Apache to start..."
-for i in $(seq 1 30); do
+for _ in $(seq 1 30); do
     if pct exec "$container_id" -- systemctl is-active --quiet apache2 2>/dev/null; then
         log_success "Apache is running."
         break

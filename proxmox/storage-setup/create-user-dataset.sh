@@ -1,18 +1,21 @@
 #!/bin/bash
 
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../../common/functions.sh
+source "$SCRIPT_DIR/../../common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
+
 # Check if username is provided
-if [ -z "$1" ]; then
+if [ -z "${1:-}" ]; then
     log_error "You must provide a username."
     log_error "Usage: $0 <username>"
     exit 1
 fi
 
-TARGET_USER=$1
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../common/functions.sh"
-
 require_root
+
+TARGET_USER=$1
 
 # Ensure user exists
 if ! id "$TARGET_USER" &>/dev/null; then
@@ -37,7 +40,6 @@ zfs set atime=off "tank/data/$TARGET_USER"
 # Apply ownership and private permissions using ACLs
 USER_UID=$(id -u "$TARGET_USER")
 log_step "Applying private ACLs (Owner UID $USER_UID) to /tank/data/$TARGET_USER..."
-source "$(dirname "$0")/../common/functions.sh"
 setup_dataset_acls "tank/data/$TARGET_USER" "/tank/data/$TARGET_USER" "$USER_UID"
 
 log_success "Private ZFS dataset for $TARGET_USER setup complete!"

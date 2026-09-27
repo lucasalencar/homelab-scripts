@@ -8,7 +8,6 @@ if [ -t 1 ]; then
     COLOR_GREEN="\033[32m"
     COLOR_YELLOW="\033[33m"
     COLOR_CYAN="\033[36m"
-    COLOR_MAGENTA="\033[35m"
 else
     COLOR_RESET=""
     COLOR_BOLD=""
@@ -16,7 +15,7 @@ else
     COLOR_GREEN=""
     COLOR_YELLOW=""
     COLOR_CYAN=""
-    COLOR_MAGENTA=""
+    COLOR_RESET=""
 fi
 
 # Prints a highlighted step header (bold cyan)
@@ -698,7 +697,7 @@ create_lxc_container() {
         --swap "$swap"
         --rootfs "${rootfs_storage}:${disk}"
         --unprivileged 1
-        --features nesting=1,keyctl=1
+        --features "nesting=1,keyctl=1"
         --net0 "name=eth0,bridge=${bridge},ip=dhcp,firewall=1"
         --ostype debian
         --onboot 1
@@ -740,7 +739,8 @@ exec_script_in_container() {
         return 1
     fi
 
-    local remote_path="/tmp/$(basename "$host_script")"
+    local remote_path
+    remote_path="/tmp/$(basename "$host_script")"
     if ! pct push "$container_id" "$host_script" "$remote_path" 2>/dev/null; then
         log_error "Failed to push $host_script to $container_id:$remote_path"
         return 1

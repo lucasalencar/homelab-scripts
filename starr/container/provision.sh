@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2015  # A && log || log is intentional: log is echo and cannot fail
 set -e
 export DEBIAN_FRONTEND=noninteractive
 
@@ -53,7 +54,8 @@ fetch_servarr() {
     log "Fetching $app_name..."
     log "  URL: $dl_url"
 
-    local tmpdir=$(mktemp -d)
+    local tmpdir
+    tmpdir=$(mktemp -d)
     local archive="$tmpdir/archive.tar.gz"
     curl -fsSL -o "$archive" "$dl_url"
 
@@ -65,8 +67,10 @@ fetch_servarr() {
 
     mkdir -p "$tmpdir/extract"
     tar --no-same-owner -xzf "$archive" -C "$tmpdir/extract" 2>/dev/null || tar --no-same-owner -xf "$archive" -C "$tmpdir/extract"
-    local top=$(find "$tmpdir/extract" -mindepth 1 -maxdepth 1 | head -1)
-    if [ -d "$top" ] && [ $(find "$tmpdir/extract" -mindepth 1 -maxdepth 1 | wc -l) -eq 1 ]; then
+    local top entry_count
+    top=$(find "$tmpdir/extract" -mindepth 1 -maxdepth 1 | head -1)
+    entry_count=$(find "$tmpdir/extract" -mindepth 1 -maxdepth 1 | wc -l)
+    if [ -d "$top" ] && [ "$entry_count" -eq 1 ]; then
         cp -r "$top"/* "$target/"
     else
         cp -r "$tmpdir/extract"/* "$target/"
@@ -92,7 +96,8 @@ fetch_bazarr() {
     log "Fetching bazarr..."
     log "  URL: $dl_url"
 
-    local tmpdir=$(mktemp -d)
+    local tmpdir
+    tmpdir=$(mktemp -d)
     local archive="$tmpdir/archive.zip"
     curl -fsSL -o "$archive" "$dl_url"
 
@@ -104,7 +109,10 @@ fetch_bazarr() {
 
     mkdir -p "$tmpdir/extract"
     unzip -q "$archive" -d "$tmpdir/extract"
-    if [ $(find "$tmpdir/extract" -mindepth 1 -maxdepth 1 | wc -l) -eq 1 ] && [ -d "$(find "$tmpdir/extract" -mindepth 1 -maxdepth 1 | head -1)" ]; then
+    local entry_count top_entry
+    entry_count=$(find "$tmpdir/extract" -mindepth 1 -maxdepth 1 | wc -l)
+    top_entry=$(find "$tmpdir/extract" -mindepth 1 -maxdepth 1 | head -1)
+    if [ "$entry_count" -eq 1 ] && [ -d "$top_entry" ]; then
         cp -r "$(find "$tmpdir/extract" -mindepth 1 -maxdepth 1 | head -1)"/* "$target/"
     else
         cp -r "$tmpdir/extract"/* "$target/"
@@ -125,7 +133,8 @@ fetch_flaresolverr() {
     log "Fetching FlareSolverr..."
     log "  URL: $dl_url"
 
-    local tmpdir=$(mktemp -d)
+    local tmpdir
+    tmpdir=$(mktemp -d)
     local archive="$tmpdir/flaresolverr.tar.gz"
     curl -fsSL -o "$archive" "$dl_url"
 

@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2015  # A && log || log is intentional: log is echo and cannot fail
 set -e
 export DEBIAN_FRONTEND=noninteractive
 

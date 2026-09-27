@@ -28,7 +28,13 @@ git config --local user.email "$GIT_EMAIL"
 log_info "Set user.name = $GIT_NAME"
 log_info "Set user.email = $GIT_EMAIL"
 
-SSH_KEY=$(ls "$PRIMARY_HOME/.ssh"/id_* 2>/dev/null | grep -v '\.pub$' | head -1)
+SSH_KEY=""
+for key in "$PRIMARY_HOME/.ssh"/id_*; do
+    [ -e "$key" ] || continue
+    case "$key" in *.pub) continue ;; esac
+    SSH_KEY="$key"
+    break
+done
 if [ -n "$SSH_KEY" ]; then
     git config --local core.sshCommand "ssh -i $SSH_KEY"
     log_info "Set core.sshCommand = ssh -i $SSH_KEY"

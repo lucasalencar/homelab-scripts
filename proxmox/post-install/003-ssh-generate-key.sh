@@ -2,8 +2,11 @@
 # Generates an Ed25519 SSH key and copies it to the specified server
 # for passwordless authentication.
 
+set -euo pipefail
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../common/functions.sh"
+# shellcheck source=../../common/functions.sh
+source "$SCRIPT_DIR/../../common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
 
 # Prevent running as root - this script is meant for local machine setup
 require_non_root
@@ -12,6 +15,7 @@ require_non_root
 CONFIG_FILE="$HOME/.proxmox_config"
 if [[ -f "$CONFIG_FILE" ]]; then
   # Source config file (variables become available)
+  # shellcheck source=/dev/null
   source "$CONFIG_FILE"
   log_info "Loaded configuration from $CONFIG_FILE"
 fi
@@ -20,7 +24,7 @@ fi
 KEY_PATH="${PROXMOX_SSH_KEY_PATH:-$HOME/.ssh/proxmox}"
 
 # Get server IP with precedence: 1) Command-line arg > 2) Config file > 3) Error
-server_ip="${1:-$PROXMOX_SERVER_IP}"
+server_ip="${1:-${PROXMOX_SERVER_IP:-}}"
 ssh_user="${PROXMOX_SSH_USER:-primaryuser}"
 ssh_host="${ssh_user}@${server_ip}"
 

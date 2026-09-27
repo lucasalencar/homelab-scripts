@@ -48,7 +48,7 @@ echo "HA OS VM: $HA_VMID"
 
 # --- Resolve backup file ---
 if [ -z "$RESTORE_FILE" ]; then
-    RESTORE_FILE=$(ls -t "$BACKUP_DIR"/configuration.yaml.* 2>/dev/null | head -1)
+    RESTORE_FILE=$(find "$BACKUP_DIR" -maxdepth 1 -name 'configuration.yaml.*' -type f 2>/dev/null | sort -r | head -1)
     if [ -z "$RESTORE_FILE" ]; then
         echo "Error: No backups found in $BACKUP_DIR"
         exit 1
@@ -74,7 +74,7 @@ fi
 # --- Stop VM gracefully ---
 echo "Shutting down VM $HA_VMID..."
 if qm shutdown "$HA_VMID" --timeout 60 2>/dev/null; then
-    for i in $(seq 1 30); do
+    for _ in $(seq 1 30); do
         qm status "$HA_VMID" 2>/dev/null | grep -q "stopped" && break
         sleep 2
     done
@@ -97,13 +97,12 @@ fi
 echo "Data partition: $DATA_DEVICE"
 
 echo "Restoring configuration.yaml from backup..."
-guestfish --rw -a "$DISK_DEVICE" <<GUESTFISH
+if ! guestfish --rw -a "$DISK_DEVICE" <<GUESTFISH
 run
 mount $DATA_DEVICE /
 upload $RESTORE_FILE /supervisor/homeassistant/configuration.yaml
 GUESTFISH
-
-if [ $? -ne 0 ]; then
+then
     echo "Error: Failed to write backup to disk."
     exit 1
 fi

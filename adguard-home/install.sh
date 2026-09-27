@@ -8,6 +8,7 @@ apt install -y jq
 
 log_step "Starting AdGuard Home installation/configuration via LXC container..."
 
+# shellcheck disable=SC2016  # evaluated later via 'bash -c'
 ADGUARD_INSTALL_CMD='bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/adguard.sh)"'
 container_id=$(ensure_container_installed "adguard" "$ADGUARD_INSTALL_CMD") || exit 1
 

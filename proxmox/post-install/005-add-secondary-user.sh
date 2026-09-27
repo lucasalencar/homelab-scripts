@@ -1,18 +1,21 @@
 #!/bin/bash
 
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../../common/functions.sh
+source "$SCRIPT_DIR/../../common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
+
 # Check if secondary username is provided
-if [ -z "$1" ]; then
+if [ -z "${1:-}" ]; then
     log_error "You must provide a username for the secondary user."
     log_error "Usage: $0 <username>"
     exit 1
 fi
 
-SECONDARY_USER=$1
-
 require_root
 
-# Load helper functions
-source "$(dirname "$0")/../common/functions.sh"
+SECONDARY_USER=$1
 
 # Load primary user
 PRIMARY_USER=$(get_primary_user) || exit 1

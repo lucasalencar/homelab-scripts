@@ -1,23 +1,27 @@
 #!/bin/bash
 
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../../common/functions.sh
+source "$SCRIPT_DIR/../../common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
+
 # Check if username is provided as an argument
-if [ -z "$1" ]; then
+if [ -z "${1:-}" ]; then
     log_error "You must provide a username as an argument."
     log_error "Usage: $0 <username>"
     exit 1
 fi
 
-SSH_USER=$1
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../common/functions.sh"
-
 require_root
+
+SSH_USER=$1
 
 # Post install script from community
 # https://community-scripts.org/scripts/post-pve-install
 log_step "Running Proxmox Post-Install Script..."
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/pve/post-pve-install.sh)"
+post_install_script="$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/pve/post-pve-install.sh)"
+bash -c "$post_install_script"
 
 log_step "Updating system packages..."
 apt update
@@ -39,7 +43,7 @@ log_step "Persisting primary user '$SSH_USER' to .server_users..."
 ensure_primary_user "$SSH_USER" || exit 1
 
 # Rename GID 1000 to 'familia' for shared access
-CURRENT_GROUP_NAME=$(getent group 1000 | cut -d: -f1)
+CURRENT_GROUP_NAME=$(getent group 1000 | cut -d: -f1 || true)
 if [ -n "$CURRENT_GROUP_NAME" ] && [ "$CURRENT_GROUP_NAME" != "familia" ]; then
     log_step "Renaming group 1000 ('$CURRENT_GROUP_NAME') to 'familia'..."
     groupmod -n familia "$CURRENT_GROUP_NAME"
@@ -66,7 +70,7 @@ fi
 # Grant $SSH_USER read-only Proxmox introspection (configs, logs, qm/pct/pvesm status).
 # Idempotent — safe to re-run.
 log_step "Granting $SSH_USER read-only access to debug commands..."
-grant_proxmox_readonly "$SSH_USER" "$(dirname "$0")/proxmox-ro.sudoers"
+grant_proxmox_readonly "$SSH_USER" "$SCRIPT_DIR/proxmox-ro.sudoers"
 
 echo ""
 log_success "Setup complete!"

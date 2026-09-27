@@ -8,11 +8,12 @@ require_root
 
 log_step "Starting Nextcloud installation/configuration via LXC container..."
 
+# shellcheck disable=SC2016  # evaluated later via 'bash -c'
 NEXTCLOUD_INSTALL_CMD='bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/nextcloudpi.sh)"'
 container_id=$(ensure_container_installed "nextcloud" "$NEXTCLOUD_INSTALL_CMD") || exit 1
 
 log_step "Waiting for container to finish first-boot setup..."
-for i in $(seq 1 30); do
+for _ in $(seq 1 30); do
     if pct exec "$container_id" -- systemctl is-system-running --wait 2>/dev/null | grep -qE 'running|degraded'; then
         break
     fi

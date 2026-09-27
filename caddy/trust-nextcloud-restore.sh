@@ -82,9 +82,7 @@ echo "Current config backed up: $CURRENT_BACKUP"
 
 # --- Restore ---
 echo "Restoring config.php from backup..."
-pct exec "$NC_CONTAINER" -- cp "$RESTORE_FILE" /var/www/nextcloud/config/config.php
-
-if [ $? -ne 0 ]; then
+if ! pct exec "$NC_CONTAINER" -- cp "$RESTORE_FILE" /var/www/nextcloud/config/config.php; then
     echo "Error: Failed to restore config.php."
     exit 1
 fi

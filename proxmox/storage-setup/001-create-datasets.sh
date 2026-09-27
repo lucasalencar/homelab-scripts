@@ -3,7 +3,13 @@
 # It creates the main datasets for media and memories, organizes subfolders,
 # and sets up permissions (UID/GID 1000) for both host user and LXC containers.
 
-source "$(dirname "$0")/../common/functions.sh"
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../../common/functions.sh
+source "$SCRIPT_DIR/../../common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
+
+require_root
 
 # Load primary user
 PRIMARY_USER=$(get_primary_user) || exit 1
@@ -44,7 +50,7 @@ chmod 2771 /tank/data # 1 at the end allows others to traverse (search)
 # Define base permissions string
 # u::rwx,g::rwx,o::x -> Owner/Group full, others traverse
 # u:1000:rwx,u:100000:rwx -> Host and Container root full access
-local root_acl="u::rwx,g::rwx,o::x,u:1000:rwx,u:100000:rwx"
+root_acl="u::rwx,g::rwx,o::x,u:1000:rwx,u:100000:rwx"
 
 setfacl -b /tank/data # Clear all
 setfacl -m "$root_acl" /tank/data
@@ -59,7 +65,7 @@ setup_dataset_acls tank/data/memorias /tank/data/memorias 1000 100000
 # 3. PRIVATE DATA: Create/Secure primary user dataset
 # This script applies strict ACLs/Permissions only for the user.
 log_step "Creating/Securing primary user dataset: $PRIMARY_USER..."
-"$(dirname "$0")/create-user-dataset.sh" "$PRIMARY_USER"
+"$SCRIPT_DIR/create-user-dataset.sh" "$PRIMARY_USER"
 
 log_success "Storage setup complete. Current datasets:"
 zfs list -o name,mountpoint,referenced

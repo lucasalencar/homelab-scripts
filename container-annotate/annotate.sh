@@ -44,7 +44,7 @@ annotate_guest() {
 
     if [ -f "${config_file}.bak" ]; then
         if [ "$OVERWRITE" != "yes" ]; then
-            read -p "  Backup already exists for $name. Overwrite? (y/N) " confirm < /dev/tty
+            read -r -p "  Backup already exists for $name. Overwrite? (y/N) " confirm < /dev/tty
             if [[ "$confirm" =~ ^[yY] ]]; then
                 cp "$config_file" "${config_file}.bak"
             fi
@@ -141,7 +141,7 @@ CADDY_TLS=()
 
 if [ -f "$CADDYFILE" ]; then
     while IFS= read -r line; do
-        if [[ $line =~ ^(http://)?([^.]+)\.$DOMAIN[[:space:]]*\{ ]]; then
+        if [[ $line =~ ^(http://)?([^.]+)\.${DOMAIN}[[:space:]]*\{ ]]; then
             current_name="${BASH_REMATCH[2]}"
             current_tls=$([ -z "${BASH_REMATCH[1]}" ] && echo 1 || echo 0)
         elif [[ $line =~ reverse_proxy[[:space:]]+(https?://)?([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+):([0-9]+) ]]; then

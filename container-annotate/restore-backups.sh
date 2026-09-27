@@ -30,7 +30,7 @@ for bak in "${backups[@]}"; do
 done
 
 echo ""
-read -p "Restore all ${#backups[@]} config(s) from backup? (y/N) " confirm
+read -r -p "Restore all ${#backups[@]} config(s) from backup? (y/N) " confirm
 
 if [[ ! "$confirm" =~ ^[yY] ]]; then
     echo "Aborted."
