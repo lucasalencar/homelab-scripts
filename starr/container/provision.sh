@@ -153,6 +153,9 @@ fetch_flaresolverr() {
 
 # Wait until FlareSolverr answers its health endpoint
 # Usage: wait_flaresolverr [timeout_seconds]
+# Timeout is optional by design: tests pass a short timeout explicitly
+# while production relies on the default below.
+# shellcheck disable=SC2120
 wait_flaresolverr() {
     local timeout="${1:-120}"
     local started=$SECONDS
@@ -206,6 +209,8 @@ WantedBy=multi-user.target
 EOF
     systemctl daemon-reload
     systemctl enable --now flaresolverr
+    # Default timeout intended; script args are not a timeout.
+    # shellcheck disable=SC2119
     if wait_flaresolverr; then
         log "FlareSolverr installed and answering on 127.0.0.1:8191"
     else

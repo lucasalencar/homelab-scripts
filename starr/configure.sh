@@ -220,7 +220,9 @@ else
     pct_status=${PIPESTATUS[1]}
 fi
 # Remove remote secrets regardless of outcome
-[ "$SKIP_AUTH" -eq 0 ] && pct exec "$starr_id" -- rm -f "$AUTH_REMOTE" "$REMOTE" >/dev/null 2>&1 || true
+if [ "$SKIP_AUTH" -eq 0 ]; then
+    pct exec "$starr_id" -- rm -f "$AUTH_REMOTE" "$REMOTE" >/dev/null 2>&1 || true
+fi
 if [ "$pct_status" -ne 0 ]; then
     log_error "Starr configure failed inside container $starr_id"
     exit 1
