@@ -36,7 +36,7 @@ fi
 
 # Save primary user for other scripts
 log_step "Persisting primary user '$SSH_USER' to .server_users..."
-echo "$SSH_USER" > "$(dirname "$0")/../.server_users"
+ensure_primary_user "$SSH_USER" || exit 1
 
 # Rename GID 1000 to 'familia' for shared access
 CURRENT_GROUP_NAME=$(getent group 1000 | cut -d: -f1)
@@ -65,6 +65,7 @@ fi
 
 # Grant $SSH_USER read-only Proxmox introspection (configs, logs, qm/pct/pvesm status).
 # Idempotent — safe to re-run.
+log_step "Granting $SSH_USER read-only access to debug commands..."
 grant_proxmox_readonly "$SSH_USER" "$(dirname "$0")/proxmox-ro.sudoers"
 
 echo ""

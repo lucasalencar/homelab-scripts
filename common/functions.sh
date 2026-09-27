@@ -145,6 +145,48 @@ add_user_to_server() {
     echo "User '$username' added to .server_users."
 }
 
+# Ensures the .server_users registry reflects the given primary user.
+# First line of the file is the primary user; remaining lines are
+# secondary users registered by 005-add-secondary-user.sh.
+# - Missing file: creates it with the primary user.
+# - Primary already first line: no-op.
+# - File has only the (different) primary: updates it.
+# - File has secondary users whose primary differs: aborts instead of
+#   truncating entries away.
+# Usage: ensure_primary_user "lucas" || exit 1
+ensure_primary_user() {
+    local username="$1"
+    [ -z "$username" ] && { echo "Error: ensure_primary_user requires a username" >&2; return 1; }
+
+    local script_dir
+    script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+    local users_file="$script_dir/../.server_users"
+    local current_primary secondary_users
+
+    if [ ! -f "$users_file" ]; then
+        echo "$username" > "$users_file"
+        echo "Created $users_file with primary user '$username'."
+        return 0
+    fi
+
+    current_primary=$(head -n 1 "$users_file")
+    if [ "$current_primary" = "$username" ]; then
+        echo "Primary user '$username' already set in $users_file."
+        return 0
+    fi
+
+    secondary_users=$(tail -n +2 "$users_file")
+    if [ -n "$secondary_users" ]; then
+        echo "Error: $users_file lists secondary users while primary is '$current_primary'." >&2
+        echo "Refusing to overwrite (would destroy registered secondary users)." >&2
+        echo "Update the file manually if the primary user really changed." >&2
+        return 1
+    fi
+
+    echo "$username" > "$users_file"
+    echo "Primary user updated from '$current_primary' to '$username' in $users_file."
+}
+
 # Returns the home directory of the primary user.
 # Usage: TARGET_HOME=$(get_primary_user_home)
 get_primary_user_home() {

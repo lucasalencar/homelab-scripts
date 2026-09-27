@@ -57,6 +57,68 @@ teardown() {
 }
 
 # -------------------------------------------------------------------
+# common/functions.sh :: ensure_primary_user
+# -------------------------------------------------------------------
+
+@test "ensure_primary_user creates .server_users when missing" {
+  tmp_root=$(mktemp -d)
+  mkdir -p "$tmp_root/common"
+  cp "$REPO_ROOT/common/functions.sh" "$tmp_root/common/functions.sh"
+  run bash -c "source '$tmp_root/common/functions.sh'; ensure_primary_user alice"
+  [ "$status" -eq 0 ]
+  [ -f "$tmp_root/.server_users" ]
+  assert_file_contains "^alice$" "$tmp_root/.server_users"
+  rm -rf "$tmp_root"
+}
+
+@test "ensure_primary_user is a no-op when primary already first line" {
+  tmp_root=$(mktemp -d)
+  mkdir -p "$tmp_root/common"
+  cp "$REPO_ROOT/common/functions.sh" "$tmp_root/common/functions.sh"
+  printf "alice\nbob\n" > "$tmp_root/.server_users"
+  run bash -c "source '$tmp_root/common/functions.sh'; ensure_primary_user alice"
+  [ "$status" -eq 0 ]
+  content=$(cat "$tmp_root/.server_users")
+  [ "$content" = "alice
+bob" ]
+  rm -rf "$tmp_root"
+}
+
+@test "ensure_primary_user refuses to overwrite others' entries" {
+  tmp_root=$(mktemp -d)
+  mkdir -p "$tmp_root/common"
+  cp "$REPO_ROOT/common/functions.sh" "$tmp_root/common/functions.sh"
+  printf "lucas\njacque\n" > "$tmp_root/.server_users"
+  run bash -c "source '$tmp_root/common/functions.sh'; ensure_primary_user carol"
+  [ "$status" -ne 0 ]
+  # The secondary user entry must survive the failed attempt
+  assert_file_contains "^jacque$" "$tmp_root/.server_users"
+  [[ "$output" == *"secondary"* ]]
+  rm -rf "$tmp_root"
+}
+
+@test "ensure_primary_user updates primary when only primary registered" {
+  tmp_root=$(mktemp -d)
+  mkdir -p "$tmp_root/common"
+  cp "$REPO_ROOT/common/functions.sh" "$tmp_root/common/functions.sh"
+  printf "oldprimary\n" > "$tmp_root/.server_users"
+  run bash -c "source '$tmp_root/common/functions.sh'; ensure_primary_user newprimary"
+  [ "$status" -eq 0 ]
+  content=$(cat "$tmp_root/.server_users")
+  [ "$content" = "newprimary" ]
+  rm -rf "$tmp_root"
+}
+
+@test "ensure_primary_user fails without username" {
+  tmp_root=$(mktemp -d)
+  mkdir -p "$tmp_root/common"
+  cp "$REPO_ROOT/common/functions.sh" "$tmp_root/common/functions.sh"
+  run bash -c "source '$tmp_root/common/functions.sh'; ensure_primary_user"
+  [ "$status" -ne 0 ]
+  rm -rf "$tmp_root"
+}
+
+# -------------------------------------------------------------------
 # common/functions.sh :: grant_proxmox_readonly
 # -------------------------------------------------------------------
 
