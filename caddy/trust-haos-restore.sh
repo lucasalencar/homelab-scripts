@@ -1,4 +1,6 @@
 #!/bin/bash
+
+set -euo pipefail
 #
 # trust-haos-restore.sh — Restores HA OS configuration.yaml from backup
 #
@@ -9,7 +11,7 @@
 #   ./trust-haos-restore.sh --vmid VMID         # explicit VM
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../common/functions.sh"
+source "$SCRIPT_DIR/../common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
 
 require_root
 
@@ -20,8 +22,8 @@ MODE="restore"
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --vmid)    HA_VMID="$2"; shift 2 ;;
-        --backup)  RESTORE_FILE="$2"; shift 2 ;;
+        --vmid)    HA_VMID="${2:-}"; shift 2 ;;
+        --backup)  RESTORE_FILE="${2:-}"; shift 2 ;;
         --list)    MODE="list"; shift ;;
         *) echo "Usage: $0 [--vmid VMID] [--backup FILE] [--list]"; exit 1 ;;
     esac
@@ -48,7 +50,7 @@ echo "HA OS VM: $HA_VMID"
 
 # --- Resolve backup file ---
 if [ -z "$RESTORE_FILE" ]; then
-    RESTORE_FILE=$(find "$BACKUP_DIR" -maxdepth 1 -name 'configuration.yaml.*' -type f 2>/dev/null | sort -r | head -1)
+    RESTORE_FILE=$(find "$BACKUP_DIR" -maxdepth 1 -name 'configuration.yaml.*' -type f 2>/dev/null | sort -r | head -1 || true)
     if [ -z "$RESTORE_FILE" ]; then
         echo "Error: No backups found in $BACKUP_DIR"
         exit 1
@@ -89,7 +91,7 @@ sleep 3
 DISK_DEVICE="/dev/pve/vm-${HA_VMID}-disk-0"
 
 echo "Locating hassos-data partition..."
-DATA_DEVICE=$(guestfish --ro -a "$DISK_DEVICE" run : findfs-label hassos-data 2>/dev/null)
+DATA_DEVICE=$(guestfish --ro -a "$DISK_DEVICE" run : findfs-label hassos-data 2>/dev/null || true)
 if [ -z "$DATA_DEVICE" ]; then
     echo "Error: Could not find hassos-data partition on disk."
     exit 1

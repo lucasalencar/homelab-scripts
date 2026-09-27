@@ -1,7 +1,10 @@
 #!/bin/bash
 
+set -euo pipefail
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../common/functions.sh"
+# shellcheck source=../common/functions.sh
+source "$SCRIPT_DIR/../common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
 
 require_root
 
@@ -141,14 +144,14 @@ if [ "$SKIP_AUTH" -eq 0 ]; then
     fi
 fi
 
-starr_id=$(get_exact_container_id_by_name "starr")
+starr_id=$(get_exact_container_id_by_name "starr" || true)
 if [ -z "$starr_id" ]; then
     log_error "Could not find container 'starr'. Run install.sh first."
     exit 1
 fi
 
 if [ "$SKIP_QBIT" -eq 0 ] && [ -z "$QBIT_HOST" ]; then
-    qbit_id=$(get_exact_container_id_by_name "qbittorrent")
+    qbit_id=$(get_exact_container_id_by_name "qbittorrent" || true)
     if [ -z "$qbit_id" ]; then
         log_error "Could not find container 'qbittorrent'. Run qbittorrent/install.sh first, pass --qbit-host, or pass --skip-qbit."
         exit 1
@@ -184,6 +187,7 @@ AUTH_REMOTE="/root/starr-auth-$$.env"
 AUTH_LOCAL=""
 cleanup_auth() {
     [ -n "$AUTH_LOCAL" ] && rm -f "$AUTH_LOCAL"
+    return 0
 }
 trap cleanup_auth EXIT
 if [ "$SKIP_AUTH" -eq 0 ]; then
@@ -213,11 +217,11 @@ if [ "$SKIP_AUTH" -eq 0 ]; then
 fi
 
 if [ "$SKIP_QBIT" -eq 1 ]; then
-    pct exec "$starr_id" -- python3 "$REMOTE" "${extra_args[@]}"
-    pct_status=$?
+    pct_status=0
+    pct exec "$starr_id" -- python3 "$REMOTE" "${extra_args[@]}" || pct_status=$?
 else
-    printf '%s\n' "$QBIT_PASS" | pct exec "$starr_id" -- python3 "$REMOTE" "${extra_args[@]}"
-    pct_status=${PIPESTATUS[1]}
+    pct_status=0
+    printf '%s\n' "$QBIT_PASS" | pct exec "$starr_id" -- python3 "$REMOTE" "${extra_args[@]}" || pct_status=${PIPESTATUS[1]}
 fi
 # Remove remote secrets regardless of outcome
 if [ "$SKIP_AUTH" -eq 0 ]; then

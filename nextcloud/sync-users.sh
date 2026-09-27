@@ -1,8 +1,10 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # Load shared functions
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../common/functions.sh"
+source "$SCRIPT_DIR/../common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
 
 require_root
 
@@ -37,11 +39,11 @@ for username in $users; do
 
     password=$(openssl rand -base64 12)
 
+    rc=0
     pct exec "$container_id" -- sudo -u www-data env "NC_PASS=$password" php /var/www/nextcloud/occ user:add \
         --display-name="$display_name" \
         --password-from-env \
-        "$username"
-    rc=$?
+        "$username" || rc=$?
 
     if [ $rc -eq 0 ]; then
         log_success "User '$username' created successfully. Temporary password: $password"

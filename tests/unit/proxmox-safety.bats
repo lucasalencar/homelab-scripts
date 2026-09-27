@@ -11,7 +11,7 @@
 # that require_root genuinely aborts when not root.
 
 setup() {
-  export REPO_ROOT="$BATS_TEST_DIRNAME/../.."
+  export REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
   export MOCK_TMPDIR=$(mktemp -d)
   export MOCK_LOG="$MOCK_TMPDIR/mock.log"
   export STUB_LOG="$MOCK_TMPDIR/stub.log"
@@ -22,11 +22,11 @@ teardown() {
   rm -rf "$MOCK_TMPDIR"
 }
 
-_proxmox_scripts() {
-  grep -rl 'common/functions\.sh' "$REPO_ROOT/proxmox" --include='*.sh'
+_guarded_scripts() {
+  grep -rl 'common/functions\.sh' "$REPO_ROOT" --include='*.sh' | grep -v '/tests/'
 }
 
-@test "proxmox scripts abort when the functions.sh import fails" {
+@test "scripts abort when the functions.sh import fails" {
   failures=""
   while IFS= read -r f; do
     line=$(grep -m1 '^[^#]*source.*common/functions\.sh' "$f")
@@ -35,28 +35,28 @@ _proxmox_scripts() {
       *) failures="$failures
   $f: $line" ;;
     esac
-  done < <(_proxmox_scripts)
+  done < <(_guarded_scripts)
   if [ -n "$failures" ]; then
     echo "FAIL (no fail-fast guard):$failures" >&2
     return 1
   fi
 }
 
-@test "proxmox scripts run with errexit (set -e family)" {
+@test "scripts run with errexit (set -e family)" {
   failures=""
   while IFS= read -r f; do
     if ! grep -qE '^set +-[a-z]*e' "$f" && ! grep -q 'set +-o +errexit' "$f"; then
       failures="$failures
   $f"
     fi
-  done < <(_proxmox_scripts)
+  done < <(_guarded_scripts)
   if [ -n "$failures" ]; then
     echo "FAIL (no errexit):$failures" >&2
     return 1
   fi
 }
 
-@test "proxmox scripts use helpers only after sourcing functions.sh" {
+@test "scripts use helpers only after sourcing functions.sh" {
   failures=""
   while IFS= read -r f; do
     src=$(grep -n -m1 '^[^#]*source.*common/functions\.sh' "$f" | cut -d: -f1)
@@ -68,7 +68,7 @@ _proxmox_scripts() {
       failures="$failures
   $f: helper used at line $first_use, sourced at line $src"
     fi
-  done < <(_proxmox_scripts)
+  done < <(_guarded_scripts)
   if [ -n "$failures" ]; then
     echo "FAIL (helper before import):$failures" >&2
     return 1
@@ -91,7 +91,7 @@ _proxmox_scripts() {
   mkdir -p "$HOME/.ssh"
   stub_dir="$MOCK_TMPDIR/stubs"
   mkdir -p "$stub_dir"
-  for cmd in adduser groupmod groupadd useradd update-grub ssh-keygen ssh-copy-id ssh sed; do
+  for cmd in adduser groupmod groupadd useradd update-grub ssh-keygen ssh-copy-id ssh sed apt-get guestfish systemctl docker rsync scp; do
     cat > "$stub_dir/$cmd" <<'EOF'
 #!/bin/bash
 echo "STUB $0 $*" >> "$STUB_LOG"
@@ -124,7 +124,7 @@ EOF
     rm -rf "$work"
     : > "$MOCK_LOG" 2>/dev/null || true
     : > "$STUB_LOG" 2>/dev/null || true
-  done < <(_proxmox_scripts)
+  done < <(_guarded_scripts)
   if [ -n "$failures" ]; then
     echo "FAIL (broken import not fail-fast):$failures" >&2
     return 1

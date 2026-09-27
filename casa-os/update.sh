@@ -1,8 +1,12 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # Load shared functions
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../common/functions.sh"
+source "$SCRIPT_DIR/../common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
+
+require_root
 
 log_step "Checking for CasaOS container updates..."
 

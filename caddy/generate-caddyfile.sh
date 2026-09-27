@@ -1,7 +1,10 @@
 #!/bin/bash
 
+set -euo pipefail
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../common/functions.sh"
+# shellcheck source=../common/functions.sh
+source "$SCRIPT_DIR/../common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
 
 require_root
 
@@ -124,7 +127,7 @@ prompt_tls() {
     local default_tls="http"
     [[ "$tls_name" == nextcloud* ]] && default_tls="https"
     local tls_choice=""
-    read -r -p "  HTTPS (tls internal) for $tls_name.$DOMAIN? [Y/n] (default: $([ "$default_tls" = "https" ] && echo "Y" || echo "n")): " tls_choice
+    read -r -p "  HTTPS (tls internal) for $tls_name.$DOMAIN? [Y/n] (default: $([ "$default_tls" = "https" ] && echo "Y" || echo "n")): " tls_choice || true
     case "${tls_choice,,}" in
         y|yes) TLS_MAP["$tls_name"]="https" ;;
         n|no)  TLS_MAP["$tls_name"]="http" ;;
@@ -144,7 +147,7 @@ while IFS= read -r cid; do
     cid="${cid// /}"
     [ -z "$cid" ] && continue
 
-    name=$(pct config "$cid" 2>/dev/null | grep -oP 'hostname:\s*\K\S+')
+    name=$(pct config "$cid" 2>/dev/null | grep -oP 'hostname:\s*\K\S+' || true)
     [ -z "$name" ] && continue
     [ "$name" = "$CADDY_CONTAINER_NAME" ] && continue
 
@@ -162,7 +165,7 @@ while IFS= read -r vmid; do
     vmid="${vmid// /}"
     [ -z "$vmid" ] && continue
 
-    name=$(qm config "$vmid" 2>/dev/null | grep -oP '(?:hostname|name):\s*\K\S+')
+    name=$(qm config "$vmid" 2>/dev/null | grep -oP '(?:hostname|name):\s*\K\S+' || true)
     [ -z "$name" ] && continue
     [ "$name" = "$CADDY_CONTAINER_NAME" ] && continue
 
@@ -172,13 +175,13 @@ while IFS= read -r vmid; do
     fi
 
     json=$(qm guest exec "$vmid" -- hostname -I 2>/dev/null)
-    ip=$(echo "$json" | jq -r '.["out-data"] // .["out"] // empty' 2>/dev/null | awk '{print $1}')
+    ip=$(echo "$json" | jq -r '.["out-data"] // .["out"] // empty' 2>/dev/null | awk '{print $1}' || true)
     if [ -z "$ip" ]; then
         json=$(qm guest exec "$vmid" -- ip -4 addr show 2>/dev/null)
-        ip=$(echo "$json" | jq -r '.["out-data"] // .["out"] // empty' 2>/dev/null | grep -oP 'inet \K[\d.]+' | grep -v '^127\.' | head -1)
+        ip=$(echo "$json" | jq -r '.["out-data"] // .["out"] // empty' 2>/dev/null | grep -oP 'inet \K[\d.]+' | grep -v '^127\.' | head -1 || true)
     fi
     if [ -z "$ip" ]; then
-        ip=$(qm config "$vmid" 2>/dev/null | grep -oP 'ipconfig\d:\s*ip=\K[^/]+' | head -1)
+        ip=$(qm config "$vmid" 2>/dev/null | grep -oP 'ipconfig\d:\s*ip=\K[^/]+' | head -1 || true)
     fi
     [ -z "$ip" ] && continue
 
@@ -236,12 +239,12 @@ for i in $(seq 0 $((TOTAL - 1))); do
     listening_ports=""
     if [ "$type" = "ct" ]; then
         if pct status "$gid" 2>/dev/null | grep -q "running"; then
-            listening_ports=$(pct exec "$gid" -- ss -tlnp 2>/dev/null | tail -n +2 | awk '{n=split($4, a, ":"); print a[n]}' | sort -n | uniq)
+            listening_ports=$(pct exec "$gid" -- ss -tlnp 2>/dev/null | tail -n +2 | awk '{n=split($4, a, ":"); print a[n]}' | sort -n | uniq || true)
         fi
     else
         if qm status "$gid" 2>/dev/null | grep -q "running"; then
             output=$(qm guest exec "$gid" -- ss -tlnp 2>/dev/null)
-            listening_ports=$(echo "$output" | jq -r '.["out-data"] // .["out"] // empty' 2>/dev/null | tail -n +2 | awk '{n=split($4, a, ":"); print a[n]}' | sort -n | uniq)
+            listening_ports=$(echo "$output" | jq -r '.["out-data"] // .["out"] // empty' 2>/dev/null | tail -n +2 | awk '{n=split($4, a, ":"); print a[n]}' | sort -n | uniq || true)
         fi
     fi
 
@@ -254,7 +257,7 @@ for i in $(seq 0 $((TOTAL - 1))); do
     # Guests listening on several ports can expose one subdomain per service
     multi="n"
     if [ "$port_count" -gt 1 ]; then
-        read -r -p "  Does $name host multiple services (one subdomain per port)? [y/N]: " multi_choice
+        read -r -p "  Does $name host multiple services (one subdomain per port)? [y/N]: " multi_choice || true
         case "${multi_choice,,}" in
             y|yes) multi="y" ;;
         esac
@@ -267,10 +270,10 @@ for i in $(seq 0 $((TOTAL - 1))); do
             [ -z "$svc_port" ] && continue
             suggestion=$(suggest_subdomain_for_port "$svc_port")
             if [ -n "$suggestion" ]; then
-                read -r -p "  Subdomain for $name port $svc_port ($ip) [default: $suggestion]: " svc_name
+                read -r -p "  Subdomain for $name port $svc_port ($ip) [default: $suggestion]: " svc_name || true
                 svc_name="${svc_name:-$suggestion}"
             else
-                read -r -p "  Subdomain for $name port $svc_port ($ip) [empty to skip]: " svc_name
+                read -r -p "  Subdomain for $name port $svc_port ($ip) [empty to skip]: " svc_name || true
             fi
             svc_name=$(echo "$svc_name" | tr -d '[:space:]' | cut -d. -f1)
             [ -z "$svc_name" ] && continue
@@ -308,7 +311,7 @@ for i in $(seq 0 $((TOTAL - 1))); do
         fi
     fi
 
-    read -r -p "  Port for $name.$DOMAIN ($ip) [default: $suggested]: " user_port
+    read -r -p "  Port for $name.$DOMAIN ($ip) [default: $suggested]: " user_port || true
     port="${user_port:-$suggested}"
     if ! [[ "$port" =~ ^[0-9]+$ ]]; then
         log_warning "  Invalid port '$port' — using $suggested"

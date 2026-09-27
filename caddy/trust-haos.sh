@@ -1,4 +1,6 @@
 #!/bin/bash
+
+set -euo pipefail
 #
 # trust-haos.sh — Configures HA OS to trust Caddy as reverse proxy
 #
@@ -8,7 +10,7 @@
 #   ./trust-haos.sh --caddy-ip X.X.X.X # custom Caddy IP (no container)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../common/functions.sh"
+source "$SCRIPT_DIR/../common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
 
 require_root
 
@@ -18,8 +20,8 @@ CADDY_IP=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --vmid)    HA_VMID="$2"; shift 2 ;;
-        --caddy-ip) CADDY_IP="$2"; shift 2 ;;
+        --vmid)    HA_VMID="${2:-}"; shift 2 ;;
+        --caddy-ip) CADDY_IP="${2:-}"; shift 2 ;;
         *) log_error "Usage: $0 [--vmid VMID] [--caddy-ip IP]"; exit 1 ;;
     esac
 done
@@ -79,7 +81,7 @@ TEMP_CONFIG="/tmp/ha-config-${HA_VMID}.yaml"
 DISK_DEVICE="/dev/pve/vm-${HA_VMID}-disk-0"
 
 log_step "Locating hassos-data partition..."
-DATA_DEVICE=$(guestfish --ro -a "$DISK_DEVICE" run : findfs-label hassos-data 2>/dev/null)
+DATA_DEVICE=$(guestfish --ro -a "$DISK_DEVICE" run : findfs-label hassos-data 2>/dev/null || true)
 if [ -z "$DATA_DEVICE" ]; then
     log_error "Could not find hassos-data partition on disk."
     exit 1
@@ -87,12 +89,16 @@ fi
 log_info "Data partition: $DATA_DEVICE"
 
 log_step "Reading current configuration..."
-guestfish --rw -a "$DISK_DEVICE" <<GUESTFISH 2>/dev/null
+if guestfish --rw -a "$DISK_DEVICE" <<GUESTFISH 2>/dev/null
 run
 mount $DATA_DEVICE /
 download /supervisor/homeassistant/configuration.yaml $TEMP_CONFIG
 GUESTFISH
-READ_OK=$?
+then
+    READ_OK=0
+else
+    READ_OK=$?
+fi
 if [ $READ_OK -ne 0 ] || [ ! -s "$TEMP_CONFIG" ]; then
     log_info "No existing configuration.yaml found, starting fresh."
     echo "{}" > "$TEMP_CONFIG"

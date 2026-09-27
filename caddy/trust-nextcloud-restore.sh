@@ -1,4 +1,6 @@
 #!/bin/bash
+
+set -euo pipefail
 #
 # trust-nextcloud-restore.sh — Restores Nextcloud config.php from backup
 #
@@ -9,7 +11,7 @@
 #   ./trust-nextcloud-restore.sh --container CONTAINER  # explicit container
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../common/functions.sh"
+source "$SCRIPT_DIR/../common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
 
 require_root
 
@@ -20,8 +22,8 @@ MODE="restore"
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --container) NC_CONTAINER="$2"; shift 2 ;;
-        --backup)    RESTORE_FILE="$2"; shift 2 ;;
+        --container) NC_CONTAINER="${2:-}"; shift 2 ;;
+        --backup)    RESTORE_FILE="${2:-}"; shift 2 ;;
         --list)      MODE="list"; shift ;;
         *) echo "Usage: $0 [--container ID] [--backup FILE] [--list]"; exit 1 ;;
     esac
@@ -58,7 +60,7 @@ pct exec "$NC_CONTAINER" -- mkdir -p "$BACKUP_DIR" 2>/dev/null
 
 # --- Resolve backup file ---
 if [ -z "$RESTORE_FILE" ]; then
-    RESTORE_FILE=$(pct exec "$NC_CONTAINER" -- ls -t "$BACKUP_DIR"/config.php.* 2>/dev/null | head -1 | tr -d '\r')
+    RESTORE_FILE=$(pct exec "$NC_CONTAINER" -- ls -t "$BACKUP_DIR"/config.php.* 2>/dev/null | head -1 | tr -d '\r' || true)
     if [ -z "$RESTORE_FILE" ]; then
         echo "Error: No backups found in $BACKUP_DIR inside container $NC_CONTAINER."
         echo "Run trust-nextcloud.sh first to create a backup."

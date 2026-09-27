@@ -1,10 +1,14 @@
 #!/bin/bash
 
+set -euo pipefail
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../common/functions.sh"
+# shellcheck source=../common/functions.sh
+source "$SCRIPT_DIR/../common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
 
 require_root
 
+CHECK=$'\u2713'
 RESTORED=0
 
 log_step "Restoring config backups"
@@ -30,7 +34,7 @@ for bak in "${backups[@]}"; do
 done
 
 echo ""
-read -r -p "Restore all ${#backups[@]} config(s) from backup? (y/N) " confirm
+read -r -p "Restore all ${#backups[@]} config(s) from backup? (y/N) " confirm || true
 
 if [[ ! "$confirm" =~ ^[yY] ]]; then
     echo "Aborted."
@@ -42,7 +46,7 @@ for bak in "${backups[@]}"; do
     orig="${bak%.bak}"
     cp "$bak" "$orig"
     echo "  $CHECK Restored: $(basename "$orig")"
-    ((RESTORED++))
+    RESTORED=$((RESTORED + 1))
 done
 
 echo ""

@@ -106,7 +106,7 @@ get_all_users() {
 # Checks if a username is already registered in .server_users
 # Usage: if is_user_registered "alice"; then echo "exists"; fi
 is_user_registered() {
-    local username="$1"
+    local username="${1:-}"
     [ -z "$username" ] && return 1
 
     local script_dir
@@ -123,7 +123,7 @@ is_user_registered() {
 # Adds a username to the end of .server_users if not already registered
 # Usage: add_user_to_server "jacque" || exit 1
 add_user_to_server() {
-    local username="$1"
+    local username="${1:-}"
     [ -z "$username" ] && return 1
 
     local script_dir
@@ -154,7 +154,7 @@ add_user_to_server() {
 #   truncating entries away.
 # Usage: ensure_primary_user "alice" || exit 1
 ensure_primary_user() {
-    local username="$1"
+    local username="${1:-}"
     [ -z "$username" ] && { echo "Error: ensure_primary_user requires a username" >&2; return 1; }
 
     local script_dir
@@ -204,7 +204,7 @@ get_primary_user_home() {
 # Override install path for tests with PROXMOX_RO_SUDOERS_FILE.
 # Usage: grant_proxmox_readonly <username> <sudoers_template_path>
 grant_proxmox_readonly() {
-    local username="$1"
+    local username="${1:-}"
     local template_file="${2:-${PROXMOX_RO_TEMPLATE:-}}"
     [ -z "$username" ] && { log_error "grant_proxmox_readonly: username required"; return 1; }
     [ -z "$template_file" ] && { log_error "grant_proxmox_readonly: sudoers template path required (arg or PROXMOX_RO_TEMPLATE)"; return 1; }
@@ -260,8 +260,8 @@ grant_proxmox_readonly() {
 # Returns the container ID.
 # Usage: ensure_container_installed "name" "install_command"
 ensure_container_installed() {
-    local name="$1"
-    local install_cmd="$2"
+    local name="${1:-}"
+    local install_cmd="${2:-}"
     local container_id
 
     container_id=$(get_container_id_by_name "$name")
@@ -288,7 +288,7 @@ ensure_container_installed() {
 # Usage: wait_container_ready <container_id> [max_attempts] [sleep_seconds]
 # Returns 0 if ready, 1 if timed out.
 wait_container_ready() {
-    local container_id="$1"
+    local container_id="${1:-}"
     local max_attempts="${2:-15}"
     local sleep_seconds="${3:-2}"
     local attempt=1
@@ -308,7 +308,7 @@ wait_container_ready() {
 # Returns the VM ID by its name (partial match, case-insensitive)
 # Usage: get_vm_id_by_name "name"
 get_vm_id_by_name() {
-    local name="$1"
+    local name="${1:-}"
     [ -z "$name" ] && return 1
     qm list 2>/dev/null | awk -v p="$name" '
         NR>1 && index(tolower($2), tolower(p)) { print $1; exit }
@@ -318,11 +318,11 @@ get_vm_id_by_name() {
 # Returns the primary IP of a VM via guest agent (fallback ipconfig from config)
 # Usage: vm_ip=$(get_vm_ip <vmid>)
 get_vm_ip() {
-    local vmid="$1"
+    local vmid="${1:-}"
     local ip
-    ip=$(qm guest exec "$vmid" -- hostname -I 2>/dev/null | jq -r '.["out-data"] // .["out"] // empty' | awk '{print $1}')
+    ip=$(qm guest exec "$vmid" -- hostname -I 2>/dev/null | jq -r '.["out-data"] // .["out"] // empty' | awk '{print $1}' || true)
     if [ -z "$ip" ]; then
-        ip=$(qm config "$vmid" 2>/dev/null | grep -oP 'ipconfig\d:\s*ip=\K[^/]+' | head -1)
+        ip=$(qm config "$vmid" 2>/dev/null | grep -oP 'ipconfig\d:\s*ip=\K[^/]+' | head -1 || true)
     fi
     echo "$ip"
 }
@@ -331,14 +331,14 @@ get_vm_ip() {
 # Waits for the container to be ready before fetching the IP.
 # Usage: container_ip=$(get_container_ip <container_id>)
 get_container_ip() {
-    local container_id="$1"
+    local container_id="${1:-}"
     local ip
 
     wait_container_ready "$container_id" || return 1
 
-    ip=$(pct exec "$container_id" -- hostname -I 2>/dev/null | awk '{print $1}')
+    ip=$(pct exec "$container_id" -- hostname -I 2>/dev/null | awk '{print $1}' || true)
     if [ -z "$ip" ]; then
-        ip=$(pct config "$container_id" | grep -oP 'ip=\K[^\s/]+' | grep -v '^dhcp$')
+        ip=$(pct config "$container_id" | grep -oP 'ip=\K[^\s/]+' | grep -v '^dhcp$' || true)
     fi
 
     echo "$ip"
@@ -353,7 +353,7 @@ apply_mounts() {
     local mp_index=1
 
     # Parse optional --start-index flag (before container_id)
-    if [[ "$1" == "--start-index" ]]; then
+    if [[ "${1:-}" == "--start-index" ]]; then
         if [[ -z "${2:-}" ]] || ! [[ "$2" =~ ^[0-9]+$ ]]; then
             log_error "apply_mounts: --start-index requires numeric value"
             return 1
@@ -362,7 +362,7 @@ apply_mounts() {
         shift 2
     fi
 
-    local container_id="$1"
+    local container_id="${1:-}"
     if [[ -z "$container_id" ]]; then
         log_error "apply_mounts: missing container_id"
         return 1
@@ -370,7 +370,7 @@ apply_mounts() {
     shift
 
     # Also handle --start-index after container_id
-    if [[ "$1" == "--start-index" ]]; then
+    if [[ "${1:-}" == "--start-index" ]]; then
         if [[ -z "${2:-}" ]] || ! [[ "$2" =~ ^[0-9]+$ ]]; then
             log_error "apply_mounts: --start-index requires numeric value"
             return 1
@@ -399,10 +399,10 @@ apply_mounts() {
 
         # Check if this index is already in use
         local existing
-        existing=$(pct config "$container_id" 2>/dev/null | grep -oP "^mp${mp_index}:\s*\K[^,]+")
+        existing=$(pct config "$container_id" 2>/dev/null | grep -oP "^mp${mp_index}:\s*\K[^,]+" || true)
         if [ -n "$existing" ]; then
             log_warning "mp${mp_index} already in use ($existing)"
-            read -r -p "Overwrite mp${mp_index}? (y/N): " confirm
+            read -r -p "Overwrite mp${mp_index}? (y/N): " confirm || true
             if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
                 log_error "Mount aborted by user — skipping apply_mounts"
                 pct start "$container_id"
@@ -429,11 +429,12 @@ apply_mounts() {
 # Returns the container ID by its name (partial match, case-insensitive)
 # Usage: get_container_id_by_name "name"
 get_container_id_by_name() {
-    local name="$1"
+    local name="${1:-}"
     if [ -z "$name" ]; then
         return 1
     fi
     pct list | grep -F -i -- "$name" | sort -n | tail -1 | awk '{print $1}'
+    return 0
 }
 
 # Returns the container ID by its exact name (case-sensitive).
@@ -441,7 +442,7 @@ get_container_id_by_name() {
 # zero or multiple containers match exactly — never guesses between them.
 # Usage: get_exact_container_id_by_name "starr" || exit 1
 get_exact_container_id_by_name() {
-    local name="$1"
+    local name="${1:-}"
     if [ -z "$name" ]; then
         return 1
     fi
@@ -460,9 +461,9 @@ get_exact_container_id_by_name() {
 # Configures ZFS ACLs for specific users and enables inheritance
 # Usage: setup_dataset_acls <dataset_name> <mount_path> <owner_uid> [extra_uids...]
 setup_dataset_acls() {
-    local dataset="$1"
-    local path="$2"
-    local owner_uid="$3"
+    local dataset="${1:-}"
+    local path="${2:-}"
+    local owner_uid="${3:-}"
     shift 3
     local extra_uids=("$@")
 
@@ -501,8 +502,8 @@ setup_dataset_acls() {
 # Appends a specific UID to existing ACLs of a path (both access and default)
 # Usage: add_dataset_acl <path> <uid>
 add_dataset_acl() {
-    local path="$1"
-    local uid="$2"
+    local path="${1:-}"
+    local uid="${2:-}"
 
     if [ -z "$uid" ] || ! [[ "$uid" =~ ^[0-9]+$ ]]; then
         log_error "add_dataset_acl: invalid uid '$uid'"
@@ -533,10 +534,10 @@ add_dataset_acl() {
 # Returns the host UID for a user inside a container (container UID + 100000)
 # Usage: host_uid=$(get_host_uid <container_id> <username>) || exit 1
 get_host_uid() {
-    local container_id="$1"
-    local username="$2"
+    local container_id="${1:-}"
+    local username="${2:-}"
     local uid
-    uid=$(pct exec "$container_id" -- id -u "$username" 2>/dev/null)
+    uid=$(pct exec "$container_id" -- id -u "$username" 2>/dev/null || true)
     if [ -z "$uid" ] || ! [[ "$uid" =~ ^[0-9]+$ ]]; then
         log_error "Could not determine UID for user '$username' inside container $container_id"
         return 1
@@ -566,7 +567,7 @@ get_pve_rootfs_storage() {
 # Usage: bridge=$(detect_pve_bridge)
 detect_pve_bridge() {
     local detected
-    detected=$(ip -o link show 2>/dev/null | grep -o "vmbr[0-9]*" | head -1)
+    detected=$(ip -o link show 2>/dev/null | grep -o "vmbr[0-9]*" | head -1 || true)
     if [ -n "$detected" ]; then
         echo "$detected"
     else
@@ -578,7 +579,7 @@ detect_pve_bridge() {
 # Usage: ctid=$(get_pve_next_id) || exit 1
 get_pve_next_id() {
     local ctid
-    ctid=$(pvesh get /cluster/nextid 2>/dev/null)
+    ctid=$(pvesh get /cluster/nextid 2>/dev/null || true)
     if [ -z "$ctid" ]; then
         log_error "Failed to get next CTID from pvesh"
         return 1
@@ -630,19 +631,19 @@ ensure_debian_template() {
     available=$(pveam available --section system 2>/dev/null || true)
 
     if [ -n "$arch" ]; then
-        template=$(echo "$available" | grep -E "debian-${version}-standard" | grep -F "$arch" | awk '{print $2}' | sort -V | tail -1)
+        template=$(echo "$available" | grep -E "debian-${version}-standard" | grep -F "$arch" | awk '{print $2}' | sort -V | tail -1 || true)
     fi
     if [ -z "$template" ]; then
-        template=$(echo "$available" | grep -E "debian-${version}-standard" | awk '{print $2}' | sort -V | tail -1)
+        template=$(echo "$available" | grep -E "debian-${version}-standard" | awk '{print $2}' | sort -V | tail -1 || true)
     fi
     if [ -z "$template" ]; then
         local available_all
         available_all=$(pveam available 2>/dev/null || true)
         if [ -n "$arch" ]; then
-            template=$(echo "$available_all" | grep -E "debian-${version}" | grep -F "$arch" | awk '{print $2}' | sort -V | tail -1)
+            template=$(echo "$available_all" | grep -E "debian-${version}" | grep -F "$arch" | awk '{print $2}' | sort -V | tail -1 || true)
         fi
         if [ -z "$template" ]; then
-            template=$(echo "$available_all" | grep -E "debian-${version}" | awk '{print $2}' | sort -V | tail -1)
+            template=$(echo "$available_all" | grep -E "debian-${version}" | awk '{print $2}' | sort -V | tail -1 || true)
         fi
     fi
     if [ -z "$template" ]; then
@@ -671,12 +672,12 @@ ensure_debian_template() {
 # Starts the container and waits until ready.
 # Usage: create_lxc_container <ctid> <hostname> <template_storage> <template_file> <rootfs_storage> <bridge> [cores] [memory] [disk_gb] [swap] [tags] [description]
 create_lxc_container() {
-    local ctid="$1"
-    local hostname="$2"
-    local template_storage="$3"
-    local template_file="$4"
-    local rootfs_storage="$5"
-    local bridge="$6"
+    local ctid="${1:-}"
+    local hostname="${2:-}"
+    local template_storage="${3:-}"
+    local template_file="${4:-}"
+    local rootfs_storage="${5:-}"
+    local bridge="${6:-}"
     local cores="${7:-2}"
     local memory="${8:-2048}"
     local disk="${9:-20}"
@@ -726,8 +727,8 @@ create_lxc_container() {
 # Pushes a host script into a container and executes it via bash.
 # Usage: exec_script_in_container <container_id> <host_script_path> [args...]
 exec_script_in_container() {
-    local container_id="$1"
-    local host_script="$2"
+    local container_id="${1:-}"
+    local host_script="${2:-}"
     shift 2 || true
 
     if [ -z "$container_id" ] || [ -z "$host_script" ]; then

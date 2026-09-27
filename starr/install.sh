@@ -1,21 +1,24 @@
 #!/bin/bash
 
+set -euo pipefail
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../common/functions.sh"
+# shellcheck source=../common/functions.sh
+source "$SCRIPT_DIR/../common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
 
 require_root
 
 log_step "Starting Starr stack installation (Prowlarr + Sonarr + Radarr + Bazarr) — single LXC..."
 
 # --- 1. Create / find container ---
-container_id=$(get_exact_container_id_by_name "starr")
+container_id=$(get_exact_container_id_by_name "starr" || true)
 
 if [ -z "$container_id" ]; then
     # Single CT runs 4 apps — resources are shared
     CT_CORES=4
-    CT_MEMORY=4096
+    CT_MEMORY=6144
     CT_DISK=20
-    CT_SWAP=512
+    CT_SWAP=1024
     log_step "Container 'starr' not found — creating new Debian 13 LXC (${CT_CORES} cores / ${CT_MEMORY} MB / ${CT_DISK}GB)..."
 
     CTID=$(get_pve_next_id) || exit 1

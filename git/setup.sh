@@ -1,7 +1,10 @@
 #!/bin/bash
 
+set -euo pipefail
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../common/functions.sh"
+# shellcheck source=../common/functions.sh
+source "$SCRIPT_DIR/../common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
 
 require_non_root
 
@@ -16,8 +19,8 @@ if [ ! -f "$GITCONFIG" ]; then
     exit 1
 fi
 
-GIT_NAME=$(git config -f "$GITCONFIG" user.name)
-GIT_EMAIL=$(git config -f "$GITCONFIG" user.email)
+GIT_NAME=$(git config -f "$GITCONFIG" user.name || true)
+GIT_EMAIL=$(git config -f "$GITCONFIG" user.email || true)
 if [ -z "$GIT_NAME" ] || [ -z "$GIT_EMAIL" ]; then
     log_error "user.name or user.email not found in $GITCONFIG."
     exit 1

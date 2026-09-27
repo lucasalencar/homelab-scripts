@@ -1,7 +1,10 @@
 #!/bin/bash
 
+set -euo pipefail
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../common/functions.sh"
+# shellcheck source=../common/functions.sh
+source "$SCRIPT_DIR/../common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
 
 require_root
 
@@ -19,7 +22,7 @@ fi
 log_info "Found Nextcloud container (ID: $container_id)"
 
 log_step "Discovering Nextcloud data directory..."
-data_dir=$(pct exec "$container_id" -- grep "'datadirectory'" /var/www/nextcloud/config/config.php 2>/dev/null | grep -oP "=>\s*'\K[^']+")
+data_dir=$(pct exec "$container_id" -- grep "'datadirectory'" /var/www/nextcloud/config/config.php 2>/dev/null | grep -oP "=>\s*'\K[^']+" || true)
 if [ -z "$data_dir" ]; then
         log_info "Could not read from config.php, checking common paths..."
     for candidate in /mnt/ncdata /var/www/nextcloud/data; do
@@ -36,7 +39,7 @@ fi
 log_info "Data directory: $data_dir"
 
 log_step "Discovering www-data UID..."
-wwwdata_internal_uid=$(pct exec "$container_id" -- id -u www-data)
+wwwdata_internal_uid=$(pct exec "$container_id" -- id -u www-data 2>/dev/null || true)
 if [ -z "$wwwdata_internal_uid" ]; then
     log_error "Could not find www-data user inside container."
     exit 1

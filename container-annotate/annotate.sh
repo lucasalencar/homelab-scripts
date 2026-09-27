@@ -1,7 +1,10 @@
 #!/bin/bash
 
+set -euo pipefail
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../common/functions.sh"
+# shellcheck source=../common/functions.sh
+source "$SCRIPT_DIR/../common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
 
 require_root
 
@@ -14,37 +17,37 @@ UPDATED=0
 SKIPPED=0
 
 get_vm_ip() {
-    local vmid="$1"
+    local vmid="${1:-}"
     local ip
 
-    json=$(qm guest exec "$vmid" -- hostname -I 2>/dev/null)
-    ip=$(echo "$json" | jq -r '.["out-data"] // .["out"] // empty' 2>/dev/null | awk '{print $1}')
+    json=$(qm guest exec "$vmid" -- hostname -I 2>/dev/null || true)
+    ip=$(echo "$json" | jq -r '.["out-data"] // .["out"] // empty' 2>/dev/null | awk '{print $1}' || true)
     if [ -z "$ip" ]; then
-        json=$(qm guest exec "$vmid" -- ip -4 addr show 2>/dev/null)
-        ip=$(echo "$json" | jq -r '.["out-data"] // .["out"] // empty' 2>/dev/null | grep -oP 'inet \K[\d.]+' | grep -v '^127\.' | head -1)
+        json=$(qm guest exec "$vmid" -- ip -4 addr show 2>/dev/null || true)
+        ip=$(echo "$json" | jq -r '.["out-data"] // .["out"] // empty' 2>/dev/null | grep -oP 'inet \K[\d.]+' | grep -v '^127\.' | head -1 || true)
     fi
     if [ -z "$ip" ]; then
-        ip=$(qm config "$vmid" 2>/dev/null | grep -oP 'ipconfig\d:\s*ip=\K[^/]+' | head -1)
+        ip=$(qm config "$vmid" 2>/dev/null | grep -oP 'ipconfig\d:\s*ip=\K[^/]+' | head -1 || true)
     fi
 
     echo "$ip"
 }
 
 annotate_guest() {
-    local config_file="$1"
-    local name="$2"
-    local ip="$3"
+    local config_file="${1:-}"
+    local name="${2:-}"
+    local ip="${3:-}"
 
     # Check if already annotated
     if grep -q "proxmox-annotate" "$config_file"; then
         echo "  $ARROW $name — already annotated"
-        ((SKIPPED++))
+        SKIPPED=$((SKIPPED + 1))
         return
     fi
 
     if [ -f "${config_file}.bak" ]; then
-        if [ "$OVERWRITE" != "yes" ]; then
-            read -r -p "  Backup already exists for $name. Overwrite? (y/N) " confirm < /dev/tty
+        if [ "${OVERWRITE:-}" != "yes" ]; then
+            read -r -p "  Backup already exists for $name. Overwrite? (y/N) " confirm < /dev/tty || true
             if [[ "$confirm" =~ ^[yY] ]]; then
                 cp "$config_file" "${config_file}.bak"
             fi
@@ -126,7 +129,7 @@ annotate_guest() {
     else
         echo "  $CHECK $name (http://$ip)"
     fi
-    ((UPDATED++))
+    UPDATED=$((UPDATED + 1))
 }
 
 log_step "Annotating guest descriptions"
@@ -164,7 +167,7 @@ while IFS= read -r cid; do
     config_file="$PVE_BASE/lxc/${cid}.conf"
     [ -f "$config_file" ] || continue
 
-    name=$(pct config "$cid" 2>/dev/null | grep -oP 'hostname:\s*\K\S+')
+    name=$(pct config "$cid" 2>/dev/null | grep -oP 'hostname:\s*\K\S+' || true)
     [ -z "$name" ] && continue
 
     [ "$name" = "caddy" ] && continue
@@ -184,7 +187,7 @@ while IFS= read -r vmid; do
     config_file="$PVE_BASE/qemu-server/${vmid}.conf"
     [ -f "$config_file" ] || continue
 
-    name=$(qm config "$vmid" 2>/dev/null | grep -oP '(?:hostname|name):\s*\K\S+')
+    name=$(qm config "$vmid" 2>/dev/null | grep -oP '(?:hostname|name):\s*\K\S+' || true)
     [ -z "$name" ] && continue
 
     ip=$(get_vm_ip "$vmid")

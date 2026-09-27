@@ -1,8 +1,10 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # Load shared functions
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../common/functions.sh"
+source "$SCRIPT_DIR/../common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
 
 require_root
 
@@ -21,11 +23,11 @@ for _ in $(seq 1 30); do
 done
 
 log_step "Disabling ncp-activation Apache site (first-run wizard)..."
-pct exec "$container_id" -- a2dissite ncp-activation 2>/dev/null
-pct exec "$container_id" -- systemctl reload apache2 2>/dev/null
+pct exec "$container_id" -- a2dissite ncp-activation 2>/dev/null || true
+pct exec "$container_id" -- systemctl reload apache2 2>/dev/null || true
 
 ADMIN_USER="ncp"
-ADMIN_PASS=$(tr -dc 'A-Za-z0-9!@#$%^&*()_+-=' < /dev/urandom | head -c 20)
+ADMIN_PASS=$(tr -dc 'A-Za-z0-9!@#$%^&*()_+-=' < /dev/urandom | head -c 20 || true)
 log_step "Setting admin user '$ADMIN_USER' password..."
 pct exec "$container_id" -- bash -c \
     "OC_PASS='$ADMIN_PASS' sudo -E -u www-data php /var/www/nextcloud/occ user:resetpassword --password-from-env '$ADMIN_USER'" 2>/dev/null

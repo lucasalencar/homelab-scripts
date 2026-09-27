@@ -1,4 +1,6 @@
 #!/bin/bash
+
+set -euo pipefail
 #
 # trust-nextcloud.sh — Configures Nextcloud to trust Caddy as reverse proxy
 #
@@ -12,7 +14,7 @@
 #   ./trust-nextcloud.sh --caddy-ip X.X.X.X                # explicit Caddy IP
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../common/functions.sh"
+source "$SCRIPT_DIR/../common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
 
 require_root
 
@@ -24,9 +26,9 @@ CADDY_IP=""
 # --- Parse args ---
 while [ $# -gt 0 ]; do
     case "$1" in
-        --container) NC_CONTAINER="$2"; shift 2 ;;
-        --domain)    DOMAIN="$2"; shift 2 ;;
-        --caddy-ip)  CADDY_IP="$2"; shift 2 ;;
+        --container) NC_CONTAINER="${2:-}"; shift 2 ;;
+        --domain)    DOMAIN="${2:-}"; shift 2 ;;
+        --caddy-ip)  CADDY_IP="${2:-}"; shift 2 ;;
         *) echo "Usage: $0 [--container ID] [--domain FQDN] [--caddy-ip IP]"; exit 1 ;;
     esac
 done
@@ -50,7 +52,7 @@ fi
 echo "Nextcloud container: $NC_CONTAINER"
 
 # --- Determine subdomain ---
-NC_HOSTNAME=$(pct config "$NC_CONTAINER" 2>/dev/null | grep -oP 'hostname:\s*\K\S+')
+NC_HOSTNAME=$(pct config "$NC_CONTAINER" 2>/dev/null | grep -oP 'hostname:\s*\K\S+' || true)
 NC_DOMAIN="${NC_HOSTNAME:-nextcloud}.$DOMAIN"
 echo "Target domain: $NC_DOMAIN"
 

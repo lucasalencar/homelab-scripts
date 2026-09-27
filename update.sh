@@ -3,10 +3,10 @@
 # Root update script for Proxmox Scripts
 # This script finds and executes all update.sh scripts in subdirectories.
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/common/functions.sh"
+source "$SCRIPT_DIR/common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
 require_root
 
 echo "Starting global update from $SCRIPT_DIR..."

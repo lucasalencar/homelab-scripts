@@ -1,7 +1,12 @@
 #!/bin/bash
 
+set -euo pipefail
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../common/functions.sh"
+# shellcheck source=../common/functions.sh
+source "$SCRIPT_DIR/../common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
+
+require_root
 
 ADGUARD_PORT="80"
 UPSTREAM_DNS=(
@@ -23,7 +28,7 @@ login_http=$(curl -s -o /dev/null -w "%{http_code}" \
   -X POST "http://${ADGUARD_IP}:${ADGUARD_PORT}/control/login" \
   -H "Content-Type: application/json" \
   -d "{\"name\": \"$username\", \"password\": \"$password\"}" \
-  -c /tmp/adguard_cookies.txt)
+  -c /tmp/adguard_cookies.txt || true)
 
 if [ "$login_http" != "200" ]; then
   log_error "Login failed (HTTP $login_http). Check username/password."
@@ -38,7 +43,7 @@ http_code=$(curl -s -o /dev/null -w "%{http_code}" \
   -X POST "http://${ADGUARD_IP}:${ADGUARD_PORT}/control/dns_config" \
   -H "Content-Type: application/json" \
   -b /tmp/adguard_cookies.txt \
-  -d "$payload")
+  -d "$payload" || true)
 
 if [ "$http_code" = "200" ]; then
   log_success "Upstream DNS configured:"

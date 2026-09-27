@@ -1,7 +1,10 @@
 #!/bin/bash
 
+set -euo pipefail
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../common/functions.sh"
+# shellcheck source=../common/functions.sh
+source "$SCRIPT_DIR/../common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
 
 require_root
 
@@ -38,7 +41,7 @@ add_dataset_acl "/tank/data/mediaserver" "$host_uid"
 # 6. Set WebUI admin password (always auto-generated)
 QBIT_USER="admin"
 log_step "Generating random password for '$QBIT_USER'..."
-OUTPUT=$(python3 "$SCRIPT_DIR/set_password.py" --container "$container_id" --user "$QBIT_USER")
+OUTPUT=$(python3 "$SCRIPT_DIR/set_password.py" --container "$container_id" --user "$QBIT_USER" || true)
 QBIT_PASS=$(echo "$OUTPUT" | awk '{print $1}')
 QBIT_HASH=$(echo "$OUTPUT" | awk '{print $2}')
 if [ -z "$QBIT_PASS" ] || [ -z "$QBIT_HASH" ]; then
