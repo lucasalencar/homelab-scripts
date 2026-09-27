@@ -163,5 +163,5 @@ getfacl /tank/data/mediaserver | grep -E "1000|100000|10[0-9]{4}"
 
 ## Resources
 
-- Default: 4 cores / 4096 MB / 20 GB. Adjust `CT_CORES`/`CT_MEMORY`/`CT_DISK`/`CT_SWAP` in `starr/install.sh` if needed.
+- Default: 4 cores / 6144 MB / 20 GB / 1024 MB swap. Adjust `CT_CORES`/`CT_MEMORY`/`CT_DISK`/`CT_SWAP` in `starr/install.sh` if needed.
 - All 4 apps share the same resource pool — more efficient than 4 x 1024 MB CTs.

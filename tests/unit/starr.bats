@@ -26,6 +26,17 @@ teardown() {
 # starr/install.sh — container creation + provision
 # -------------------------------------------------------------------
 
+@test "starr install creates new container with 6GB RAM and 1GB swap" {
+  export MOCK_PCT_LIST="VMID       Status     Lock         Name"
+  export MOCK_PCT_CONFIG="hostname: test"
+  export MOCK_PCT_EXEC_ID_U_root="0"
+
+  run bash "$REPO_ROOT/starr/install.sh" 2>&1
+  [ "$status" -eq 0 ]
+  /usr/bin/grep -q -- "--memory 6144" "$MOCK_LOG"
+  /usr/bin/grep -q -- "--swap 1024" "$MOCK_LOG"
+}
+
 @test "starr install creates new container and pushes provision script when not exists" {
   export MOCK_PCT_LIST="VMID       Status     Lock         Name"
   export MOCK_PCT_CONFIG="hostname: test"
