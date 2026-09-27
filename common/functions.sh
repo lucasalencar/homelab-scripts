@@ -252,8 +252,8 @@ grant_proxmox_readonly() {
         log_step "Installed $sudoers_file."
     fi
 
-    log_success "$username can now inspect Proxmox state without sudo."
-    log_info "Write commands (qm start, pct stop, etc.) remain root-only."
+    log_success "$username can now inspect Proxmox state via sudo (full path required)."
+    log_info "Use e.g. sudo /usr/sbin/pct list; bare pct/qm without sudo still fails."
 }
 
 # Ensures a container is installed, running a command if it's missing.

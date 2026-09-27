@@ -4,11 +4,17 @@
 
 # Cluster / HA
 __SUDO_USER__ ALL=(root) NOPASSWD: \
-    /usr/sbin/pvecm status, \
+    /usr/bin/pvecm status, \
     /usr/bin/pvecm nodes, \
     /usr/bin/pvecm expected, \
     /usr/sbin/ha-manager status, \
     /usr/sbin/ha-manager config
+
+# Version / API — somente leitura
+__SUDO_USER__ ALL=(root) NOPASSWD: \
+    /usr/bin/pveversion, \
+    /usr/bin/pveversion -v, \
+    /usr/bin/pvesh get *
 
 # QEMU/KVM — somente leitura
 __SUDO_USER__ ALL=(root) NOPASSWD: \
@@ -16,15 +22,34 @@ __SUDO_USER__ ALL=(root) NOPASSWD: \
     /usr/sbin/qm status, \
     /usr/sbin/qm config, \
     /usr/sbin/qm pending, \
-    /usr/sbin/qm showcmd, \
-    /usr/sbin/qm monitor
+    /usr/sbin/qm showcmd
 
 # LXC — somente leitura
 __SUDO_USER__ ALL=(root) NOPASSWD: \
     /usr/sbin/pct list, \
     /usr/sbin/pct status, \
     /usr/sbin/pct config, \
-    /usr/sbin/pct pending
+    /usr/sbin/pct pending, \
+    /usr/sbin/pct listsnapshot
+
+# QEMU snapshots — somente leitura
+__SUDO_USER__ ALL=(root) NOPASSWD: \
+    /usr/sbin/qm listsnapshot
+
+# Templates
+__SUDO_USER__ ALL=(root) NOPASSWD: \
+    /usr/bin/pveam list, \
+    /usr/bin/pveam available
+
+# ZFS — somente leitura
+__SUDO_USER__ ALL=(root) NOPASSWD: \
+    /usr/bin/zfs list, \
+    /usr/bin/zpool status, \
+    /usr/bin/zpool list
+
+# Firewall — somente leitura
+__SUDO_USER__ ALL=(root) NOPASSWD: \
+    /usr/sbin/pve-firewall status
 
 # Storage
 __SUDO_USER__ ALL=(root) NOPASSWD: \
