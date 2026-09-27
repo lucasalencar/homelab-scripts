@@ -13,7 +13,7 @@ echo "Starting global update from $SCRIPT_DIR..."
 
 # Find update scripts based on arguments or discovery
 if [ $# -gt 0 ]; then
-    echo "Updating specific packages: $@"
+    echo "Updating specific packages: $*"
     UPDATE_SCRIPTS=""
     for pkg in "$@"; do
         # Clean trailing slashes if any

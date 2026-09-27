@@ -8,5 +8,5 @@ test-verbose:
 	@BATS_WARN_BW01=0 BATS_WARN_BW02=0 bats --verbose-run tests/unit
 
 lint:
-	shellcheck common/*.sh */*.sh */*/*.sh
+	find . -path ./.git -prune -o -name '*.sh' -print0 | xargs -0 shellcheck
 	@echo "shellcheck done"
