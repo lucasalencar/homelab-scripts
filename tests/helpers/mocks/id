@@ -16,5 +16,18 @@ if [[ "$*" == *"-u"* ]]; then
   fi
   exit 0
 fi
+# For id -nG username, return the list of supplementary groups (controllable via MOCK_ID_NG)
+if [[ "$*" == *"-nG"* ]]; then
+  echo "${MOCK_ID_NG:-}"
+  exit 0
+fi
+# For plain `id username`, succeed only for known test users; otherwise fail.
+if [[ "$*" != *"-"* ]]; then
+  user="${*%% *}"
+  case "$user" in
+    testuser|lucas|alice|root) exit 0 ;;
+    *) echo "id: '$user': no such user" >&2; exit 1 ;;
+  esac
+fi
 # delegate to real id
 /usr/bin/id "$@" 2>/dev/null || echo "1000"

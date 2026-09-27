@@ -1,0 +1,43 @@
+# Read-only Proxmox introspection — template.
+# Installed at /etc/sudoers.d/proxmox-ro (mode 0440, owner root:root).
+# Permitido apenas o que não muda estado; tudo mais é recusado por padrão.
+
+# Cluster / HA
+__SUDO_USER__ ALL=(root) NOPASSWD: \
+    /usr/sbin/pvecm status, \
+    /usr/bin/pvecm nodes, \
+    /usr/bin/pvecm expected, \
+    /usr/sbin/ha-manager status, \
+    /usr/sbin/ha-manager config
+
+# QEMU/KVM — somente leitura
+__SUDO_USER__ ALL=(root) NOPASSWD: \
+    /usr/sbin/qm list, \
+    /usr/sbin/qm status, \
+    /usr/sbin/qm config, \
+    /usr/sbin/qm pending, \
+    /usr/sbin/qm showcmd, \
+    /usr/sbin/qm monitor
+
+# LXC — somente leitura
+__SUDO_USER__ ALL=(root) NOPASSWD: \
+    /usr/sbin/pct list, \
+    /usr/sbin/pct status, \
+    /usr/sbin/pct config, \
+    /usr/sbin/pct pending
+
+# Storage
+__SUDO_USER__ ALL=(root) NOPASSWD: \
+    /usr/sbin/pvesm status, \
+    /usr/sbin/pvesm list, \
+    /usr/sbin/pvesm scan
+
+# Node / Cert
+__SUDO_USER__ ALL=(root) NOPASSWD: \
+    /usr/bin/pvenode acmedetails, \
+    /usr/bin/pvenode cert, \
+    /usr/bin/pvenode status
+
+# Cluster FS / Corosync
+__SUDO_USER__ ALL=(root) NOPASSWD: \
+    /usr/sbin/corosync-cfgtool -s

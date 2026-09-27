@@ -153,6 +153,68 @@ get_primary_user_home() {
     getent passwd "$user" | cut -d: -f6
 }
 
+# Grants read-only Proxmox introspection to a user.
+# Adds them to www-data (read /etc/pve/*), adm + systemd-journal (logs),
+# and installs an idempotent sudoers drop-in that exposes only read-only
+# subcommands (qm config, pct status, pvesm list, etc.). Write operations
+# stay root-only.
+# The caller owns the template path (this function does not know the repo
+# layout). Pass it as the 2nd arg or set PROXMOX_RO_TEMPLATE.
+# Override install path for tests with PROXMOX_RO_SUDOERS_FILE.
+# Usage: grant_proxmox_readonly <username> <sudoers_template_path>
+grant_proxmox_readonly() {
+    local username="$1"
+    local template_file="${2:-${PROXMOX_RO_TEMPLATE:-}}"
+    [ -z "$username" ] && { log_error "grant_proxmox_readonly: username required"; return 1; }
+    [ -z "$template_file" ] && { log_error "grant_proxmox_readonly: sudoers template path required (arg or PROXMOX_RO_TEMPLATE)"; return 1; }
+    if ! id "$username" >/dev/null 2>&1; then
+        log_error "grant_proxmox_readonly: user '$username' does not exist"
+        return 1
+    fi
+    if [ ! -f "$template_file" ]; then
+        log_error "grant_proxmox_readonly: template not found at $template_file"
+        return 1
+    fi
+
+    local grp
+    for grp in www-data adm systemd-journal; do
+        if ! getent group "$grp" >/dev/null 2>&1; then
+            log_warning "Group '$grp' not present on this host; skipping."
+            continue
+        fi
+        if id -nG "$username" 2>/dev/null | tr ' ' '\n' | grep -qx "$grp"; then
+            log_info "$username already in '$grp' group."
+        else
+            usermod -aG "$grp" "$username"
+        fi
+    done
+
+    local sudoers_file="${PROXMOX_RO_SUDOERS_FILE:-/etc/sudoers.d/proxmox-ro}"
+
+    local sudoers_tmp
+    sudoers_tmp="$(mktemp)"
+    chmod 0440 "$sudoers_tmp"
+    sed "s|__SUDO_USER__|$username|g" "$template_file" > "$sudoers_tmp"
+
+    if ! visudo -c -f "$sudoers_tmp" >/dev/null 2>&1; then
+        log_error "visudo rejected the proposed $sudoers_file; not installing."
+        rm -f "$sudoers_tmp"
+        return 1
+    fi
+
+    if [ -f "$sudoers_file" ] && cmp -s "$sudoers_tmp" "$sudoers_file"; then
+        log_info "$sudoers_file already up to date."
+        rm -f "$sudoers_tmp"
+    else
+        install -o root -g root -m 0440 "$sudoers_tmp" "$sudoers_file"
+        rm -f "$sudoers_tmp"
+        log_step "Installed $sudoers_file."
+    fi
+
+    log_success "$username can now inspect Proxmox state without sudo."
+    log_info "Write commands (qm start, pct stop, etc.) remain root-only."
+}
+
 # Ensures a container is installed, running a command if it's missing.
 # Returns the container ID.
 # Usage: ensure_container_installed "name" "install_command"

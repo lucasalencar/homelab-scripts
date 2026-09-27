@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source "$(dirname "$0")/../mock_lib.sh"
+mock_log "visudo" "$@"
+# Allow per-test override to simulate parse failures
+if [ "${MOCK_VISUDO_FAIL:-0}" = "1" ]; then
+  echo "visudo: invalid sudoers file" >&2
+  exit 1
+fi
+exit 0

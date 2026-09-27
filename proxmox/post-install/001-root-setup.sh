@@ -63,6 +63,10 @@ if ! grep -q "root:1000:1" /etc/subgid; then
     echo "root:1000:1" >> /etc/subgid
 fi
 
+# Grant $SSH_USER read-only Proxmox introspection (configs, logs, qm/pct/pvesm status).
+# Idempotent — safe to re-run.
+grant_proxmox_readonly "$SSH_USER" "$(dirname "$0")/proxmox-ro.sudoers"
+
 echo ""
 log_success "Setup complete!"
 log_info "User '$SSH_USER' is now set as the primary data owner (UID 1000)."
