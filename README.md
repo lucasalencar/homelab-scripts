@@ -79,6 +79,6 @@ Edit `~/.proxmox_config` (on your local machine) or `proxmox_config.example` to 
 
 ```bash
 PROXMOX_SERVER_IP="192.168.1.100"     # Your Proxmox server IP
-PROXMOX_SSH_USER="lucas"               # SSH username
+PROXMOX_SSH_USER="primaryuser"       # SSH username
 PROXMOX_SSH_KEY_PATH="$HOME/.ssh/proxmox"  # SSH key location
 ```

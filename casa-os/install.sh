@@ -15,7 +15,7 @@ while [[ $# -gt 0 ]]; do
             log_error "Usage: $0 [-d|--documents <host_path>]"
             echo ""
             echo "Options:"
-            echo "  -d, --documents <path>  Mount a host path as /DATA/Documents (e.g., /tank/data/lucas)"
+            echo "  -d, --documents <path>  Mount a host path as /DATA/Documents (e.g., /tank/data/primaryuser)"
             echo "                          Default: skip"
             exit 0
             ;;

@@ -9,7 +9,7 @@ fi
 # For id -u username, return 1000 for known users
 if [[ "$*" == *"-u"* ]]; then
   user=$(echo "$*" | awk '{print $NF}')
-  if [ "$user" = "testuser" ] || [ "$user" = "lucas" ] || [ "$user" = "alice" ]; then
+  if [ "$user" = "testuser" ] || [ "$user" = "alice" ]; then
     echo "1000"
   else
     echo "1001"
@@ -25,7 +25,7 @@ fi
 if [[ "$*" != *"-"* ]]; then
   user="${*%% *}"
   case "$user" in
-    testuser|lucas|alice|root) exit 0 ;;
+    testuser|alice|root) exit 0 ;;
     *) echo "id: '$user': no such user" >&2; exit 1 ;;
   esac
 fi

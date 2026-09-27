@@ -11,7 +11,7 @@ if [ "${1:-}" = "passwd" ]; then
   fi
   # default: return user home
   case "$user" in
-    testuser|lucas) echo "$user:x:1000:1000::/home/$user:/bin/bash" ;;
+    testuser|alice) echo "$user:x:1000:1000::/home/$user:/bin/bash" ;;
     *) echo "$user:x:1001:1001::/home/$user:/bin/bash" ;;
   esac
   exit 0

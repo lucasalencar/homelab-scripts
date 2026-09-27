@@ -21,7 +21,7 @@ KEY_PATH="${PROXMOX_SSH_KEY_PATH:-$HOME/.ssh/proxmox}"
 
 # Get server IP with precedence: 1) Command-line arg > 2) Config file > 3) Error
 server_ip="${1:-$PROXMOX_SERVER_IP}"
-ssh_user="${PROXMOX_SSH_USER:-lucas}"
+ssh_user="${PROXMOX_SSH_USER:-primaryuser}"
 ssh_host="${ssh_user}@${server_ip}"
 
 # Validate that server IP was provided (either via config or argument)
@@ -46,10 +46,10 @@ if ! grep -q "IdentityFile $KEY_PATH" ~/.ssh/config 2>/dev/null; then
 
 Host proxmox
     HostName SERVER_IP
-    User lucas
+    User SSH_USER
     IdentityFile KEY_PATH
 EOF
-  sed -i '' "s|SERVER_IP|$server_ip|g; s|KEY_PATH|$KEY_PATH|g" ~/.ssh/config
+  sed -i '' "s|SERVER_IP|$server_ip|g; s|KEY_PATH|$KEY_PATH|g; s|SSH_USER|$ssh_user|g" ~/.ssh/config
   log_success "SSH config updated at ~/.ssh/config"
 fi
 

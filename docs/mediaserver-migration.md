@@ -92,7 +92,7 @@ pct set $QB -delete mp0 2>/dev/null; pct set $QB -delete mp1 2>/dev/null; pct se
 pct set $QB -mp1 /tank/data/mediaserver,mp=/data
 # inicia e espera responder a pct exec
 pct start $QB; wait_container_ready $QB
-# deve listar só media e downloads, não lucas/memorias
+# deve listar só media e downloads, não primaryuser/memorias
 pct exec $QB -- ls -l /data
 
 # Jellyfin: monta só media pra não indexar incompletos como biblioteca
@@ -132,7 +132,7 @@ pct exec $QB -- rm /data/downloads/series/.hardlink-test /data/media/Series/.har
 # não deve listar dados privados do host
 pct exec $QB -- ls /data
 # deve negar acesso a dataset privado (ACL o::-)
-pct exec $QB -- ls /data | grep -q "lucas" && echo "FAIL: isolamento quebrou" || echo "ACL/isolamento OK: lucas não exposto"
+pct exec $QB -- ls /data | grep -q "primaryuser" && echo "FAIL: isolamento quebrou" || echo "ACL/isolamento OK: primaryuser não exposto"
 # pega IP pra testar WebUI/Caddy
 pct exec $QB -- hostname -I
 ```

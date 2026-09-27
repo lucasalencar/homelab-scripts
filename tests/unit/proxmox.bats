@@ -88,11 +88,11 @@ bob" ]
   tmp_root=$(mktemp -d)
   mkdir -p "$tmp_root/common"
   cp "$REPO_ROOT/common/functions.sh" "$tmp_root/common/functions.sh"
-  printf "lucas\njacque\n" > "$tmp_root/.server_users"
+  printf "alice\nbob\n" > "$tmp_root/.server_users"
   run bash -c "source '$tmp_root/common/functions.sh'; ensure_primary_user carol"
   [ "$status" -ne 0 ]
   # The secondary user entry must survive the failed attempt
-  assert_file_contains "^jacque$" "$tmp_root/.server_users"
+  assert_file_contains "^bob$" "$tmp_root/.server_users"
   [[ "$output" == *"secondary"* ]]
   rm -rf "$tmp_root"
 }
