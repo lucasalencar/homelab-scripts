@@ -1,4 +1,4 @@
-# Proxmox Scripts
+# Homelab Scripts
 
 Repository of scripts to automate Proxmox server setup, storage configuration, and service installation (LXC/VM).
 
