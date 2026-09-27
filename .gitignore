@@ -9,3 +9,6 @@ caddy/Caddyfile.local
 
 # Python bytecode cache
 __pycache__/
+
+# Pinned toolchain binaries bootstrapped by make (e.g. shellcheck)
+.tools/
