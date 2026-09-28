@@ -83,6 +83,19 @@ _install_env() {
   grep -q -- "--sshkeys" "$MOCK_LOG"
 }
 
+@test "coding-vm install picks up the conventional mac key from the primary user home" {
+  _install_env
+  unset CODING_VM_SSH_PUBKEY_FILE
+  mkdir -p "$MOCK_TMPDIR/fakehome"
+  printf 'ssh-ed25519 AAAAC3Nzc2VudGVzdA== mac-key\n' > "$MOCK_TMPDIR/fakehome/code-mac.pub"
+  export MOCK_GETENT_PASSWD="testuser:x:1000:1000::$MOCK_TMPDIR/fakehome:/bin/bash"
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  home-assistant       running    4096              32.00 12345'
+  run bash "$REPO_ROOT/coding-vm/install.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"code-mac.pub"* ]]
+  ! grep -q "No user SSH key" <<< "$output"
+}
+
 @test "coding-vm install warns but continues without a user key" {
   _install_env
   unset CODING_VM_SSH_PUBKEY_FILE

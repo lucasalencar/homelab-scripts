@@ -76,7 +76,7 @@ if [ -n "$USER_PUBKEY_FILE" ] && [ ! -f "$USER_PUBKEY_FILE" ]; then
 fi
 if [ -z "$USER_PUBKEY_FILE" ]; then
     primary_home=$(get_primary_user_home) || exit 1
-    for candidate in "$primary_home/.ssh/id_ed25519.pub" "$primary_home/.ssh/id_rsa.pub" "$primary_home/.ssh/id_ecdsa.pub"; do
+    for candidate in "$primary_home/code-mac.pub" "$primary_home/.ssh/id_ed25519.pub" "$primary_home/.ssh/id_rsa.pub" "$primary_home/.ssh/id_ecdsa.pub"; do
         if [ -f "$candidate" ]; then
             USER_PUBKEY_FILE="$candidate"
             break
