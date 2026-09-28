@@ -74,11 +74,22 @@ require_non_root() {
 }
 fi
 
+# Returns the user registry path (override for tests via SERVER_USERS_FILE).
+# Usage: users_file=$(server_users_file)
+server_users_file() {
+    if [ -n "${SERVER_USERS_FILE:-}" ]; then
+        echo "$SERVER_USERS_FILE"
+    else
+        local script_dir
+        script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+        echo "$script_dir/../.server_users"
+    fi
+}
+
 # Returns the primary username from .server_users file (first user in the list)
 get_primary_user() {
-    local script_dir
-    script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-    local users_file="$script_dir/../.server_users"
+    local users_file
+    users_file=$(server_users_file)
 
     if [ ! -f "$users_file" ]; then
         echo "Error: .server_users file not found. Run 001-root-setup.sh first." >&2
@@ -91,9 +102,8 @@ get_primary_user() {
 # Returns all registered server usernames from .server_users file
 # Usage: for user in $(get_all_users); do echo "$user"; done
 get_all_users() {
-    local script_dir
-    script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-    local users_file="$script_dir/../.server_users"
+    local users_file
+    users_file=$(server_users_file)
 
     if [ ! -f "$users_file" ]; then
         echo "Error: .server_users file not found. Run 001-root-setup.sh first." >&2
@@ -109,9 +119,8 @@ is_user_registered() {
     local username="${1:-}"
     [ -z "$username" ] && return 1
 
-    local script_dir
-    script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-    local users_file="$script_dir/../.server_users"
+    local users_file
+    users_file=$(server_users_file)
 
     if [ ! -f "$users_file" ]; then
         return 1
@@ -126,9 +135,8 @@ add_user_to_server() {
     local username="${1:-}"
     [ -z "$username" ] && return 1
 
-    local script_dir
-    script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-    local users_file="$script_dir/../.server_users"
+    local users_file
+    users_file=$(server_users_file)
 
     if [ ! -f "$users_file" ]; then
         echo "Error: .server_users file not found. Run 001-root-setup.sh first." >&2
@@ -157,9 +165,8 @@ ensure_primary_user() {
     local username="${1:-}"
     [ -z "$username" ] && { echo "Error: ensure_primary_user requires a username" >&2; return 1; }
 
-    local script_dir
-    script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-    local users_file="$script_dir/../.server_users"
+    local users_file
+    users_file=$(server_users_file)
     local current_primary secondary_users
 
     if [ ! -f "$users_file" ]; then

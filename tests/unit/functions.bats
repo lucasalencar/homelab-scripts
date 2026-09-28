@@ -12,10 +12,6 @@ setup() {
 
 teardown() {
   rm -rf "$MOCK_TMPDIR"
-  # Clean up real .server_users if tests left it (user tests use temp root, but guard anyway)
-  if [ -f "$REPO_ROOT/.server_users" ] && grep -q "bats-temp-user" "$REPO_ROOT/.server_users" 2>/dev/null; then
-    rm -f "$REPO_ROOT/.server_users"
-  fi
 }
 
 # Helper: create isolated functions.sh root where ../.server_users resolves to temp
@@ -98,6 +94,19 @@ create_temp_root() {
   output=$(bash -c "source '$tmp_root/common/functions.sh'; is_user_registered '' && echo yes || echo no" 2>&1)
   [ "$output" = "no" ]
   rm -rf "$tmp_root"
+}
+
+@test "user registry honors SERVER_USERS_FILE override" {
+  users_tmp=$(mktemp)
+  printf "override-primary\nsecond\n" > "$users_tmp"
+  output=$(SERVER_USERS_FILE="$users_tmp" bash -c 'source "$REPO_ROOT/common/functions.sh"; get_primary_user' 2>&1)
+  [ "$output" = "override-primary" ]
+  output=$(SERVER_USERS_FILE="$users_tmp" bash -c 'source "$REPO_ROOT/common/functions.sh"; get_all_users' 2>&1)
+  [ "$output" = "override-primary
+second" ]
+  output=$(SERVER_USERS_FILE="$users_tmp" bash -c 'source "$REPO_ROOT/common/functions.sh"; is_user_registered second && echo yes || echo no' 2>&1)
+  [ "$output" = "yes" ]
+  rm -f "$users_tmp"
 }
 
 @test "add_user_to_server appends new user" {

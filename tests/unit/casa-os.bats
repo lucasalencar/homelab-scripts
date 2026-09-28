@@ -6,19 +6,12 @@ setup() {
   export PATH="$BATS_TEST_DIRNAME/../helpers/mocks:$PATH"
   export REPO_ROOT="$BATS_TEST_DIRNAME/../.."
   export BASH_ENV="$BATS_TEST_DIRNAME/../helpers/bypass_root.sh"
-  if [ -f "$REPO_ROOT/.server_users" ]; then
-    cp "$REPO_ROOT/.server_users" "$MOCK_TMPDIR/.server_users.bak"
-  fi
+  # Hermetic user registry — scripts under test resolve .server_users here,
+  # never the real repo file.
+  export SERVER_USERS_FILE="$MOCK_TMPDIR/.server_users"
 }
 
 teardown() {
-  if [ -f "$MOCK_TMPDIR/.server_users.bak" ]; then
-    cp "$MOCK_TMPDIR/.server_users.bak" "$REPO_ROOT/.server_users"
-  elif [ -f "$REPO_ROOT/.server_users" ]; then
-    if grep -q "bats-test" "$REPO_ROOT/.server_users" 2>/dev/null || grep -q "testuser" "$REPO_ROOT/.server_users" 2>/dev/null; then
-      rm -f "$REPO_ROOT/.server_users"
-    fi
-  fi
   rm -rf "$MOCK_TMPDIR"
 }
 
@@ -27,7 +20,7 @@ teardown() {
 # -------------------------------------------------------------------
 
 @test "casa-os install with default mounts succeeds" {
-  echo "testuser" > "$REPO_ROOT/.server_users"
+  echo "testuser" > "$SERVER_USERS_FILE"
   export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n102        running                 casaos'
   export MOCK_PCT_CONFIG="hostname: casaos"
   export MOCK_PCT_EXEC_ID_U_root="0"
@@ -41,7 +34,7 @@ teardown() {
 }
 
 @test "casa-os install rejects documents path outside /tank/data" {
-  echo "testuser" > "$REPO_ROOT/.server_users"
+  echo "testuser" > "$SERVER_USERS_FILE"
   export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n102        running                 casaos'
   export MOCK_PCT_CONFIG="hostname: casaos"
   export MOCK_PCT_EXEC_ID_U_root="0"
@@ -52,7 +45,7 @@ teardown() {
 }
 
 @test "casa-os install rejects non-existent documents path" {
-  echo "testuser" > "$REPO_ROOT/.server_users"
+  echo "testuser" > "$SERVER_USERS_FILE"
   export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n102        running                 casaos'
   run bash "$REPO_ROOT/casa-os/install.sh" --documents "/tank/data/nonexistent-$(date +%s)"
   [ "$status" -ne 0 ]
