@@ -140,6 +140,41 @@ qm set "$vmid" --ide2 "$STORAGE:cloudinit"
 qm set "$vmid" --boot order=scsi0 --serial0 socket
 qm set "$vmid" --ciuser "$CI_USER" --sshkeys "$combined_keys" --ipconfig0 ip=dhcp
 rm -f "$combined_keys"
+
+log_step "Ensuring first-boot guest agent via cloud-init vendor-data..."
+storage_json=$(pvesh get /storage --output-format json 2>/dev/null || echo "[]")
+snippet_storage=$(echo "$storage_json" | jq -r '[.[] | select(.content != null and (.content | split(",") | index("snippets")))] | .[0].storage // empty' || true)
+snippet_path=""
+if [ -z "$snippet_storage" ]; then
+    log_step "Enabling snippets content on local storage..."
+    local_content=$(echo "$storage_json" | jq -r '.[] | select(.storage == "local") | .content // empty' || true)
+    local_path=$(echo "$storage_json" | jq -r '.[] | select(.storage == "local") | .path // empty' || true)
+    if [ -z "$local_content" ] || [ -z "$local_path" ]; then
+        log_error "No storage with snippets content and no local storage to enable it on."
+        exit 1
+    fi
+    pvesm set local --content "$local_content,snippets" || exit 1
+    snippet_storage="local"
+    snippet_path="$local_path"
+else
+    snippet_path=$(echo "$storage_json" | jq -r --arg s "$snippet_storage" '.[] | select(.storage == $s) | .path // empty' || true)
+fi
+if [ -z "$snippet_path" ]; then
+    log_error "Could not determine path for snippets storage '$snippet_storage'."
+    exit 1
+fi
+snippet_file="$snippet_path/snippets/coding-vm-vendor.yaml"
+mkdir -p "$(dirname "$snippet_file")"
+cat > "$snippet_file" <<'EOF'
+#cloud-config
+# Installed by coding-vm/install.sh: guest agent from first boot so that
+# qm guest exec works immediately (stock Ubuntu cloud images lack it).
+packages:
+  - qemu-guest-agent
+runcmd:
+  - [systemctl, enable, --now, qemu-guest-agent]
+EOF
+qm set "$vmid" --cicustom "vendor=${snippet_storage}:snippets/coding-vm-vendor.yaml"
 qm resize "$vmid" scsi0 "${DISK_GB}G"
 
 log_step "Starting VM $vmid..."

@@ -14,6 +14,16 @@ if [[ "${1:-}" == "get" && "${2:-}" == "/cluster/nextid" ]]; then
   fi
   exit 0
 fi
+if [[ "${1:-}" == "get" && "${2:-}" == "/storage" ]]; then
+  if [ -n "${MOCK_PVESH_STORAGE+set}" ]; then
+    echo -e "$MOCK_PVESH_STORAGE"
+  else
+    cat <<'EOF'
+[{"storage":"local","type":"dir","content":"import,backup,iso,vztmpl,snippets","path":"/var/lib/vz"},{"storage":"local-lvm","type":"lvmthin","content":"images,rootdir"},{"storage":"tank","type":"zfspool","content":"images,rootdir"}]
+EOF
+  fi
+  exit 0
+fi
 if [ "${MOCK_PVESH_FAIL:-0}" = "1" ]; then
   exit 1
 fi

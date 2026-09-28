@@ -29,6 +29,7 @@ _install_env() {
   export CODING_VM_SSH_PUBKEY_FILE="$MOCK_TMPDIR/testkey.pub"
   export CODING_VM_PROVISION_KEY_FILE="$MOCK_TMPDIR/provision-key"
   export CODING_VM_MIN_IMAGE_BYTES="0"
+  export MOCK_PVESH_STORAGE='[{"storage":"local","type":"dir","content":"import,backup,iso,vztmpl,snippets","path":"'"$MOCK_TMPDIR"'/vz"},{"storage":"local-lvm","type":"lvmthin","content":"images,rootdir"}]'
 }
 
 # -------------------------------------------------------------------
@@ -102,6 +103,27 @@ EOF
   run bash "$REPO_ROOT/coding-vm/install.sh"
   [ "$status" -eq 0 ]
   grep -q "^qm create" "$MOCK_LOG"
+}
+
+@test "coding-vm install sets vendor snippet for first-boot agent" {
+  _install_env
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  home-assistant       running    4096              32.00 12345'
+  run bash "$REPO_ROOT/coding-vm/install.sh"
+  [ "$status" -eq 0 ]
+  grep -q "cicustom" "$MOCK_LOG"
+  grep -q "vendor=" "$MOCK_LOG"
+  [ -f "$MOCK_TMPDIR/vz/snippets/coding-vm-vendor.yaml" ]
+  grep -q "qemu-guest-agent" "$MOCK_TMPDIR/vz/snippets/coding-vm-vendor.yaml"
+}
+
+@test "coding-vm install enables snippets on local when missing" {
+  _install_env
+  export MOCK_PVESH_STORAGE='[{"storage":"local","type":"dir","content":"import,backup,iso,vztmpl","path":"'"$MOCK_TMPDIR"'/vz"}]'
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  home-assistant       running    4096              32.00 12345'
+  run bash "$REPO_ROOT/coding-vm/install.sh"
+  [ "$status" -eq 0 ]
+  grep -q "pvesm set local" "$MOCK_LOG"
+  grep -q "cicustom" "$MOCK_LOG"
 }
 
 @test "coding-vm install rejects a truncated image" {
