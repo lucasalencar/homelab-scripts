@@ -6,19 +6,12 @@ setup() {
   export PATH="$BATS_TEST_DIRNAME/../helpers/mocks:$PATH"
   export REPO_ROOT="$BATS_TEST_DIRNAME/../.."
   export BASH_ENV="$BATS_TEST_DIRNAME/../helpers/bypass_root.sh"
-  if [ -f "$REPO_ROOT/.server_users" ]; then
-    cp "$REPO_ROOT/.server_users" "$MOCK_TMPDIR/.server_users.bak"
-  fi
+  # Hermetic user registry — scripts under test resolve .server_users here,
+  # never the real repo file.
+  export SERVER_USERS_FILE="$MOCK_TMPDIR/.server_users"
 }
 
 teardown() {
-  if [ -f "$MOCK_TMPDIR/.server_users.bak" ]; then
-    cp "$MOCK_TMPDIR/.server_users.bak" "$REPO_ROOT/.server_users"
-  elif [ -f "$REPO_ROOT/.server_users" ]; then
-    if grep -q "bats-test" "$REPO_ROOT/.server_users" 2>/dev/null || grep -q "testuser" "$REPO_ROOT/.server_users" 2>/dev/null; then
-      rm -f "$REPO_ROOT/.server_users"
-    fi
-  fi
   if [ -f "$REPO_ROOT/caddy/Caddyfile.local" ] && grep -q "bats-test" "$REPO_ROOT/caddy/Caddyfile.local" 2>/dev/null; then
     rm -f "$REPO_ROOT/caddy/Caddyfile.local"
   fi
@@ -36,7 +29,7 @@ teardown() {
   export NEXTCLOUD_MOUNT_PATH="$MOCK_TMPDIR/ncdata"
   export NEXTCLOUD_DATASET="tank/data/nextcloud-test"
   # Mock required user lookup to avoid extra setup
-  echo "testuser" > "$REPO_ROOT/.server_users"
+  echo "testuser" > "$SERVER_USERS_FILE"
   # Mock pct exec for occ etc. — default mock succeeds
   run bash "$REPO_ROOT/nextcloud/install.sh" 2>&1
   # With mocked container already existing, should skip install and succeed
@@ -48,7 +41,7 @@ teardown() {
 # -------------------------------------------------------------------
 
 @test "nextcloud sync-users creates missing users and skips existing" {
-  echo -e "alice\nbob" > "$REPO_ROOT/.server_users"
+  echo -e "alice\nbob" > "$SERVER_USERS_FILE"
   export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n101        running                 nextcloud'
   export MOCK_PCT_CONFIG="hostname: nextcloud"
   run bash "$REPO_ROOT/nextcloud/sync-users.sh" 2>&1
@@ -59,7 +52,7 @@ teardown() {
 }
 
 @test "nextcloud sync-users handles empty server users" {
-  echo "" > "$REPO_ROOT/.server_users"
+  echo "" > "$SERVER_USERS_FILE"
   export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n101        running                 nextcloud'
   export MOCK_PCT_CONFIG="hostname: nextcloud"
   run bash "$REPO_ROOT/nextcloud/sync-users.sh" 2>&1
@@ -81,7 +74,7 @@ teardown() {
   # Hermetic: point the host mount path at tmp so no real /tank is touched
   export NEXTCLOUD_MOUNT_PATH="$MOCK_TMPDIR/ncdata"
   export NEXTCLOUD_DATASET="tank/data/nextcloud-test"
-  echo "testuser" > "$REPO_ROOT/.server_users"
+  echo "testuser" > "$SERVER_USERS_FILE"
   export MOCK_GETENT_PASSWD="testuser:x:1000:1000::/home/testuser:/bin/bash"
   export MOCK_ID_UID="1000"
   run bash "$REPO_ROOT/nextcloud/setup-storage.sh" 2>&1
@@ -93,7 +86,7 @@ teardown() {
 
 @test "nextcloud setup-storage handles missing container" {
   export MOCK_PCT_LIST="VMID       Status     Lock         Name"
-  echo "testuser" > "$REPO_ROOT/.server_users"
+  echo "testuser" > "$SERVER_USERS_FILE"
   run bash "$REPO_ROOT/nextcloud/setup-storage.sh" 2>&1
   [ "$status" -ne 0 ]
   [[ "$output" == *"not found"* ]] || [[ "$output" == *"Nextcloud container"* ]]

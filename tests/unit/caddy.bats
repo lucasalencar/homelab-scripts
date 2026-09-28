@@ -6,19 +6,9 @@ setup() {
   export PATH="$BATS_TEST_DIRNAME/../helpers/mocks:$PATH"
   export REPO_ROOT="$BATS_TEST_DIRNAME/../.."
   export BASH_ENV="$BATS_TEST_DIRNAME/../helpers/bypass_root.sh"
-  if [ -f "$REPO_ROOT/.server_users" ]; then
-    cp "$REPO_ROOT/.server_users" "$MOCK_TMPDIR/.server_users.bak"
-  fi
 }
 
 teardown() {
-  if [ -f "$MOCK_TMPDIR/.server_users.bak" ]; then
-    cp "$MOCK_TMPDIR/.server_users.bak" "$REPO_ROOT/.server_users"
-  elif [ -f "$REPO_ROOT/.server_users" ]; then
-    if grep -q "bats-test" "$REPO_ROOT/.server_users" 2>/dev/null || grep -q "testuser" "$REPO_ROOT/.server_users" 2>/dev/null; then
-      rm -f "$REPO_ROOT/.server_users"
-    fi
-  fi
   if [ -f "$REPO_ROOT/caddy/Caddyfile.local" ] && grep -q "bats-test" "$REPO_ROOT/caddy/Caddyfile.local" 2>/dev/null; then
     rm -f "$REPO_ROOT/caddy/Caddyfile.local"
   fi
