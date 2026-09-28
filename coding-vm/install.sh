@@ -108,7 +108,7 @@ else
         log_step "Verifying image checksum..."
         sums_file="$IMAGE_DIR/SHA256SUMS"
         curl -fsSL -o "$sums_file" "$(dirname "$IMAGE_URL")/SHA256SUMS" || { log_error "Checksum file download failed."; exit 1; }
-        (cd "$IMAGE_DIR" && grep " $(basename "$image_file")\$" SHA256SUMS | sha256sum -c -) || { log_error "Image checksum mismatch."; exit 1; }
+        (cd "$IMAGE_DIR" && grep -E "[ *]$(basename "$image_file")\$" SHA256SUMS | sha256sum -c -) || { log_error "Image checksum mismatch."; exit 1; }
     fi
 fi
 if [ ! -f "$image_file" ]; then

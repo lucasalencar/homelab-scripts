@@ -68,6 +68,42 @@ _install_env() {
   grep -q "discard=on,ssd=1" "$MOCK_LOG"
 }
 
+@test "coding-vm install verifies image against Ubuntu SHA256SUMS star-marker format" {
+  _install_env
+  export CODING_VM_SKIP_DOWNLOAD="0"
+  export CODING_VM_SKIP_CHECKSUM="0"
+  export CODING_VM_MIN_IMAGE_BYTES="0"
+  export CODING_VM_IMAGE_URL="https://example.invalid/noble-server-cloudimg-amd64.img"
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  home-assistant       running    4096              32.00 12345'
+  mkdir -p "$CODING_VM_IMAGE_DIR"
+  printf 'fake-image-bytes' > "$CODING_VM_IMAGE_DIR/noble-server-cloudimg-amd64.img"
+  export MOCK_SHA256SUMS_LINE="$(sha256sum "$CODING_VM_IMAGE_DIR/noble-server-cloudimg-amd64.img" | awk '{print $1}') *noble-server-cloudimg-amd64.img"
+  mkdir -p "$MOCK_TMPDIR/bin"
+  cat > "$MOCK_TMPDIR/bin/curl" <<'EOF'
+#!/usr/bin/env bash
+echo "curl $*" >> "$MOCK_LOG"
+outfile=""
+args=("$@")
+for ((i=0; i<${#args[@]}; i++)); do
+  if [ "${args[i]}" = "-o" ]; then
+    outfile="${args[i+1]}"
+  fi
+done
+url="${args[${#args[@]}-1]}"
+if [[ "$url" == */SHA256SUMS ]]; then
+  echo "$MOCK_SHA256SUMS_LINE" > "$outfile"
+fi
+exit 0
+EOF
+  # NOTE: chmod is shadowed by a no-op logging mock under test PATH —
+  # newly created fixtures need the real binary to become executable.
+  /bin/chmod +x "$MOCK_TMPDIR/bin/curl"
+  export PATH="$MOCK_TMPDIR/bin:$PATH"
+  run bash "$REPO_ROOT/coding-vm/install.sh"
+  [ "$status" -eq 0 ]
+  grep -q "^qm create" "$MOCK_LOG"
+}
+
 @test "coding-vm install rejects a truncated image" {
   _install_env
   export CODING_VM_MIN_IMAGE_BYTES="104857600"
