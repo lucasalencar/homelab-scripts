@@ -54,9 +54,9 @@ cp coding-vm/ssh_config.example ~/.coding_vm_config
 ./coding-vm/ssh-setup.sh
 ```
 
-This generates `~/.ssh/code` if missing, ensures the key is authorized on
-the VM, and adds the `Host code` entry used by `ssh` and VS Code
-Remote-SSH.
+This ensures the key is authorized on the VM and adds the `Host code`
+entry used by `ssh` and VS Code Remote-SSH. (Key generation is skipped —
+the key already exists from step 1.)
 
 ### 4. Connect and verify
 
