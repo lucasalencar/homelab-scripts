@@ -260,6 +260,15 @@ second" ]
   [ "$output" = "192.168.1.50" ]
 }
 
+@test "get_vm_ip returns empty when qm config is dhcp" {
+  export MOCK_QM_GUEST_HOSTNAME_I=""
+  export MOCK_QM_GUEST_EXEC_OUTPUT='{"out-data": "", "exitcode": 0}'
+  export MOCK_QM_CONFIG="ipconfig0: ip=dhcp,ip6=dhcp"
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; get_vm_ip 200'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 @test "get_container_ip returns IP from pct exec" {
   export MOCK_PCT_EXEC_HOSTNAME_I="10.0.0.5 10.0.0.6"
   # wait_container_ready should succeed (pct exec -- true returns 0)
@@ -299,6 +308,23 @@ net0: name=eth0,bridge=vmbr0,ip=10.0.0.99/24,ip=10.0.0.99"
 @test "wait_container_ready times out when container not responsive" {
   export MOCK_PCT_EXEC_FAIL=1
   run bash -c 'source "$REPO_ROOT/common/functions.sh"; wait_container_ready 999 2 0'
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not responsive"* ]]
+}
+
+# -------------------------------------------------------------------
+# wait_vm_ready
+# -------------------------------------------------------------------
+
+@test "wait_vm_ready succeeds when guest agent responds" {
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; wait_vm_ready 100 2 0; echo ok'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ok"* ]]
+}
+
+@test "wait_vm_ready times out when guest agent not responsive" {
+  export MOCK_QM_GUEST_FAIL=1
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; wait_vm_ready 999 2 0'
   [ "$status" -ne 0 ]
   [[ "$output" == *"not responsive"* ]]
 }

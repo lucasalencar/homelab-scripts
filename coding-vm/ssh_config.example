@@ -1,0 +1,14 @@
+# ~/.coding_vm_config - Coding VM SSH Configuration
+# Copy this file to ~/.coding_vm_config and customize
+
+# Required (unless passed as argument): IP address of the coding VM
+CODING_VM_IP="192.168.1.100"
+
+# Optional: SSH username in the VM (defaults to your local username)
+CODING_VM_USER="myuser"
+
+# Optional: SSH key file path (defaults to "$HOME/.ssh/code")
+CODING_VM_SSH_KEY_PATH="$HOME/.ssh/code"
+
+# Optional: ssh config alias (defaults to "code")
+CODING_VM_SSH_ALIAS="code"

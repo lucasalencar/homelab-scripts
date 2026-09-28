@@ -114,7 +114,7 @@ get_all_users() {
 }
 
 # Checks if a username is already registered in .server_users
-# Usage: if is_user_registered "alice"; then echo "exists"; fi
+# Usage: if is_user_registered "example-user"; then echo "exists"; fi
 is_user_registered() {
     local username="${1:-}"
     [ -z "$username" ] && return 1
@@ -130,7 +130,7 @@ is_user_registered() {
 }
 
 # Adds a username to the end of .server_users if not already registered
-# Usage: add_user_to_server "jacque" || exit 1
+# Usage: add_user_to_server "example-user" || exit 1
 add_user_to_server() {
     local username="${1:-}"
     [ -z "$username" ] && return 1
@@ -160,7 +160,7 @@ add_user_to_server() {
 # - File has only the (different) primary: updates it.
 # - File has secondary users whose primary differs: aborts instead of
 #   truncating entries away.
-# Usage: ensure_primary_user "alice" || exit 1
+# Usage: ensure_primary_user "example-user" || exit 1
 ensure_primary_user() {
     local username="${1:-}"
     [ -z "$username" ] && { echo "Error: ensure_primary_user requires a username" >&2; return 1; }
@@ -312,6 +312,27 @@ wait_container_ready() {
     return 1
 }
 
+# Waits until a VM responds to qm guest exec commands.
+# Usage: wait_vm_ready <vmid> [max_attempts] [sleep_seconds]
+# Returns 0 if ready, 1 if timed out.
+wait_vm_ready() {
+    local vmid="${1:-}"
+    local max_attempts="${2:-60}"
+    local sleep_seconds="${3:-5}"
+    local attempt=1
+
+    while [ "$attempt" -le "$max_attempts" ]; do
+        if qm guest exec "$vmid" -- true 2>/dev/null; then
+            return 0
+        fi
+        sleep "$sleep_seconds"
+        attempt=$((attempt + 1))
+    done
+
+    log_error "VM $vmid not responsive after $((max_attempts * sleep_seconds))s"
+    return 1
+}
+
 # Returns the VM ID by its name (partial match, case-insensitive)
 # Usage: get_vm_id_by_name "name"
 get_vm_id_by_name() {
@@ -329,7 +350,7 @@ get_vm_ip() {
     local ip
     ip=$(qm guest exec "$vmid" -- hostname -I 2>/dev/null | jq -r '.["out-data"] // .["out"] // empty' | awk '{print $1}' || true)
     if [ -z "$ip" ]; then
-        ip=$(qm config "$vmid" 2>/dev/null | grep -oP 'ipconfig\d:\s*ip=\K[^/]+' | head -1 || true)
+        ip=$(qm config "$vmid" 2>/dev/null | grep -oP 'ipconfig\d:\s*ip=\K[^/]+' | grep -v '^dhcp' | head -1 || true)
     fi
     echo "$ip"
 }

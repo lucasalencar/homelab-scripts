@@ -1,0 +1,60 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permissions": [
+    {
+      "action": "edit",
+      "resource": "*.server_users",
+      "effect": "deny"
+    },
+    {
+      "action": "shell",
+      "resource": "rm *.server_users*",
+      "effect": "deny"
+    },
+    {
+      "action": "shell",
+      "resource": "*sudo rm *.server_users*",
+      "effect": "deny"
+    },
+    {
+      "action": "shell",
+      "resource": "mv *.server_users*",
+      "effect": "deny"
+    },
+    {
+      "action": "shell",
+      "resource": "*sudo mv *.server_users*",
+      "effect": "deny"
+    },
+    {
+      "action": "shell",
+      "resource": "*unlink *.server_users*",
+      "effect": "deny"
+    },
+    {
+      "action": "shell",
+      "resource": "*shred *.server_users*",
+      "effect": "deny"
+    },
+    {
+      "action": "shell",
+      "resource": "*cp *.server_users*",
+      "effect": "deny"
+    },
+    {
+      "action": "shell",
+      "resource": "*tee *.server_users*",
+      "effect": "deny"
+    },
+    {
+      "action": "shell",
+      "resource": "*>*.server_users*",
+      "effect": "deny"
+    },
+    {
+      "action": "shell",
+      "resource": "*git clean*-f*",
+      "effect": "deny"
+    }
+  ]
+}
