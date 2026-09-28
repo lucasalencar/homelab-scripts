@@ -114,7 +114,7 @@ get_all_users() {
 }
 
 # Checks if a username is already registered in .server_users
-# Usage: if is_user_registered "alice"; then echo "exists"; fi
+# Usage: if is_user_registered "example-user"; then echo "exists"; fi
 is_user_registered() {
     local username="${1:-}"
     [ -z "$username" ] && return 1
@@ -130,7 +130,7 @@ is_user_registered() {
 }
 
 # Adds a username to the end of .server_users if not already registered
-# Usage: add_user_to_server "jacque" || exit 1
+# Usage: add_user_to_server "example-user" || exit 1
 add_user_to_server() {
     local username="${1:-}"
     [ -z "$username" ] && return 1
@@ -160,7 +160,7 @@ add_user_to_server() {
 # - File has only the (different) primary: updates it.
 # - File has secondary users whose primary differs: aborts instead of
 #   truncating entries away.
-# Usage: ensure_primary_user "alice" || exit 1
+# Usage: ensure_primary_user "example-user" || exit 1
 ensure_primary_user() {
     local username="${1:-}"
     [ -z "$username" ] && { echo "Error: ensure_primary_user requires a username" >&2; return 1; }

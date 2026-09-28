@@ -45,8 +45,8 @@ under sudo it is `/root`, not your home.)
 With options (always absolute paths for the same reason):
 
 ```bash
-CODING_VM_SSH_PUBKEY_FILE=/home/lucas/code-mac.pub \
-  DOTFILES_BOOTSTRAP=/home/lucas/dotfiles/bootstrap.sh ./coding-vm/install.sh
+CODING_VM_SSH_PUBKEY_FILE=/home/<user>/code-mac.pub \
+  DOTFILES_BOOTSTRAP=/home/<user>/dotfiles/bootstrap.sh ./coding-vm/install.sh
 ```
 
 The install prints the VM IP at the end. `DOTFILES_BOOTSTRAP` is optional:
@@ -92,7 +92,7 @@ ssh code
 
 ```bash
 CODING_VM_CORES=6 CODING_VM_MEMORY_MB=8192 CODING_VM_DISK_GB=60 \
-  CODING_VM_SSH_PUBKEY_FILE=/home/lucas/code-mac.pub ./coding-vm/install.sh
+  CODING_VM_SSH_PUBKEY_FILE=/home/<user>/code-mac.pub ./coding-vm/install.sh
 ```
 
 All overrides: `CODING_VM_NAME`, `CODING_VM_CORES`, `CODING_VM_MEMORY_MB`,

@@ -87,3 +87,13 @@ Package READMEs document usage and user-facing info (commands to run, ports, fol
 
 - Link to the script (`see starr/install.sh`) instead of copying its logic.
 - Never paste generated output (e.g. Caddyfile snippets) into logs or READMEs when a generator owns it — point at the generator instead.
+
+### 14. Never leak .server_users humans into committed content
+
+The usernames in `.server_users` are real people (primary + secondary users).
+Never hardcode them in scripts, docs, or examples: resolve them dynamically
+(`get_primary_user`, `get_all_users`, `get_primary_user_home`) or use `<user>`
+placeholders. System/application accounts owned by a service (e.g.
+`qbittorrent`) and test fixtures (`testuser`) are not people and are exempt.
+Locked by `tests/unit/no-hardcoded-users.bats` (`.server_users` stays
+gitignored; committed files must not contain its usernames).
