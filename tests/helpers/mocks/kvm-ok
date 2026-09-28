@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source "$(dirname "$0")/../mock_lib.sh"
+mock_log "kvm-ok" "$@"
+if [ "${MOCK_KVM_OK_FAIL:-0}" = "1" ]; then
+  echo "KVM acceleration can NOT be used" >&2
+  exit 1
+fi
+echo "KVM acceleration can be used"
+exit 0

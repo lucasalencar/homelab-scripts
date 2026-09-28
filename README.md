@@ -30,6 +30,7 @@ Some services include an `update.sh` to keep them up to date via the host CLI:
 *   **casa-os/**: Installs CasaOS LXC and mounts Media, Gallery, and Documents.
 *   **jellyfin/**: Installs Jellyfin LXC, configures ACLs, and mounts Media.
 *   **home-assistant-os/**: Installs Home Assistant OS as a VM.
+*   **coding-vm/**: Creates Ubuntu Desktop VM `code` for coding (SSH/RDP, LAN only).
 
 ## Setup Order
 
