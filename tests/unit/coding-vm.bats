@@ -133,6 +133,46 @@ _install_env() {
   grep -q "^kvm-ok" "$MOCK_LOG"
 }
 
+# -------------------------------------------------------------------
+# coding-vm/ssh-setup.sh (client-side, HOME is faked)
+# -------------------------------------------------------------------
+
+@test "coding-vm ssh-setup generates key, copies it and writes ssh config" {
+  export HOME="$MOCK_TMPDIR/home"
+  mkdir -p "$HOME/.ssh"
+  for mock in ssh-keygen ssh-copy-id; do
+    chmod +x "$BATS_TEST_DIRNAME/../helpers/mocks/$mock"
+  done
+  run bash "$REPO_ROOT/coding-vm/ssh-setup.sh" "testuser@10.0.0.10"
+  [ "$status" -eq 0 ]
+  grep -q "^ssh-keygen" "$MOCK_LOG"
+  grep -q "^ssh-copy-id" "$MOCK_LOG"
+  grep -q "^Host code$" "$HOME/.ssh/config"
+  grep -q "HostName 10.0.0.10" "$HOME/.ssh/config"
+}
+
+@test "coding-vm ssh-setup does not regenerate an existing key" {
+  export HOME="$MOCK_TMPDIR/home"
+  mkdir -p "$HOME/.ssh"
+  touch "$HOME/.ssh/code"
+  for mock in ssh-keygen ssh-copy-id; do
+    chmod +x "$BATS_TEST_DIRNAME/../helpers/mocks/$mock"
+  done
+  : > "$MOCK_LOG"
+  run bash "$REPO_ROOT/coding-vm/ssh-setup.sh" "10.0.0.10"
+  [ "$status" -eq 0 ]
+  ! grep -q "^ssh-keygen" "$MOCK_LOG"
+  grep -q "^ssh-copy-id" "$MOCK_LOG"
+}
+
+@test "coding-vm ssh-setup fails without an IP" {
+  export HOME="$MOCK_TMPDIR/home"
+  mkdir -p "$HOME/.ssh"
+  run bash "$REPO_ROOT/coding-vm/ssh-setup.sh"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"IP"* ]]
+}
+
 @test "coding-vm provision check-only aborts without KVM device" {
   export CODING_VM_TEST_MODE="1"
   export CODING_VM_KVM_DEVICE="$MOCK_TMPDIR/no-kvm-here"

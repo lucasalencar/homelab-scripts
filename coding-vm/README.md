@@ -9,13 +9,30 @@ System base only — languages, editors and Android SDK come from dotfiles.
 |---|---|
 | `install.sh` | Creates the `code` VM (cloud image, cloud-init), provisions the guest and validates KVM. |
 | `provision.sh` | Runs inside the guest (or via `install.sh` over SSH); `--check-only` runs validations. |
+| `ssh-setup.sh [user@]<vm_ip>` | **Run on your client machine.** Generates an SSH key, copies it to the VM and adds an ssh config entry. |
 | `update.sh` | Upgrades guest packages via the guest agent. |
 
 ## Execution order
 
 ```
-install.sh
+install.sh                                        (on Proxmox as root)
+ssh-setup.sh [user@]<vm_ip>                       (on your Mac/client)
 update.sh   (run any time to upgrade)
+```
+
+## SSH setup (from your Mac)
+
+```bash
+# Option A: pass the VM IP directly
+./coding-vm/ssh-setup.sh 192.168.31.50
+
+# Option B: config file
+cp coding-vm/ssh_config.example ~/.coding_vm_config
+# Edit ~/.coding_vm_config, then:
+./coding-vm/ssh-setup.sh
+
+# Afterwards (VS Code Remote-SSH works with the same alias)
+ssh code
 ```
 
 ## Examples
