@@ -106,18 +106,6 @@ _install_env() {
   grep -q -- "--sshkeys" "$MOCK_LOG"
 }
 
-@test "coding-vm install forwards dotfiles bootstrap file to guest" {
-  _install_env
-  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  home-assistant       running    4096              32.00 12345'
-  printf '#!/bin/bash\necho bootstrap\n' > "$MOCK_TMPDIR/bootstrap.sh"
-  chmod +x "$MOCK_TMPDIR/bootstrap.sh"
-  export DOTFILES_BOOTSTRAP="$MOCK_TMPDIR/bootstrap.sh"
-  run bash "$REPO_ROOT/coding-vm/install.sh"
-  [ "$status" -eq 0 ]
-  grep -q "bootstrap.sh" "$MOCK_LOG"
-  grep -q "DOTFILES_BOOTSTRAP=/tmp/coding-vm-dotfiles-bootstrap" "$MOCK_LOG"
-}
-
 @test "coding-vm install fails when bridge is missing" {
   _install_env
   export MOCK_IP_LINK_SHOW="1: lo: <LOOPBACK> mtu 65536"

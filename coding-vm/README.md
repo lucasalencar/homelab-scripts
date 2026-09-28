@@ -1,14 +1,15 @@
 # coding-vm
 
 Ubuntu Desktop 24.04 VM for coding.
-System base only — languages, editors and Android SDK come from dotfiles.
+System base only — languages, editors and Android SDK are installed manually
+after first login.
 
 ## Scripts
 
 | Script | Where it runs | Description |
 |---|---|---|
 | `install.sh` | Proxmox host, as root | Creates the `code` VM, provisions the guest and validates KVM. |
-| `provision.sh` | Inside the guest (called by `install.sh`) | System packages, KVM group, SSH/RDP, dotfiles hook. `--check-only` runs validations. |
+| `provision.sh` | Inside the guest (called by `install.sh`) | System packages, KVM group, SSH/RDP. `--check-only` runs validations. |
 | `ssh-setup.sh [user@]<vm_ip>` | Your Mac / client, as your user | SSH key, key copy to the VM, `Host code` config entry. |
 | `update.sh` | Proxmox host, as root | Upgrades guest packages via the guest agent. |
 
@@ -45,14 +46,12 @@ under sudo it is `/root`, not your home.)
 With options (always absolute paths for the same reason):
 
 ```bash
-CODING_VM_SSH_PUBKEY_FILE=/home/<user>/code-mac.pub \
-  DOTFILES_BOOTSTRAP=/home/<user>/dotfiles/bootstrap.sh ./coding-vm/install.sh
+CODING_VM_SSH_PUBKEY_FILE=/home/<user>/code-mac.pub ./coding-vm/install.sh
 ```
 
-The install prints the VM IP at the end. `DOTFILES_BOOTSTRAP` is optional:
-a host-side script copied into the guest and run as your user (see below).
-Without `CODING_VM_SSH_PUBKEY_FILE` the install still succeeds, but your
-key is not injected — follow the recovery hint it prints.
+The install prints the VM IP at the end. Without `CODING_VM_SSH_PUBKEY_FILE`
+the install still succeeds, but your key is not injected — follow the
+recovery hint it prints.
 
 ### 3. Set up SSH from your Mac (on the Mac, as your user)
 
@@ -82,6 +81,9 @@ ssh code
 - No user key injected in step 2? Add it from the host with:
   `qm guest exec <id> -- bash -c "echo 'PUBKEY' >> /home/<user>/.ssh/authorized_keys"`.
 
+After first login, set up your environment manually (languages, editors,
+Android SDK): the system base (desktop, KVM, SSH, RDP) is already in place.
+
 ### Ongoing: updates (on Proxmox, as root)
 
 ```bash
@@ -99,7 +101,7 @@ All overrides: `CODING_VM_NAME`, `CODING_VM_CORES`, `CODING_VM_MEMORY_MB`,
 `CODING_VM_BALLOON_MB`, `CODING_VM_DISK_GB`, `CODING_VM_STORAGE`,
 `CODING_VM_BRIDGE`, `CODING_VM_CI_USER`, `CODING_VM_SSH_PUBKEY_FILE`,
 `CODING_VM_PROVISION_KEY_FILE`, `CODING_VM_IMAGE_URL`, `CODING_VM_IMAGE_DIR`,
-`CODING_VM_WAIT_TIMEOUT`, `DOTFILES_BOOTSTRAP`, `CODING_VM_SSH_ALIAS`.
+`CODING_VM_WAIT_TIMEOUT`, `CODING_VM_SSH_ALIAS`.
 
 ## SSH keys (two identities)
 
@@ -111,9 +113,3 @@ All overrides: `CODING_VM_NAME`, `CODING_VM_CORES`, `CODING_VM_MEMORY_MB`,
   copied to the host. Injected via cloud-init alongside the provisioning
   key, so login works immediately (Ubuntu cloud images lock password
   login, so adding the key later may require console access).
-
-`DOTFILES_BOOTSTRAP` is an executable script that `provision.sh` runs as the
-cloud-init user after the system setup. If it is a file on the Proxmox host,
-`install.sh` copies it to `/tmp/coding-vm-dotfiles-bootstrap` inside the VM;
-otherwise the value is treated as a path that already exists in the guest.
-When unset, the user environment step is skipped.

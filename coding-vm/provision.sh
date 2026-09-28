@@ -1,10 +1,10 @@
 #!/bin/bash
 #
 # Guest-side provisioning for the coding VM (Ubuntu Desktop).
-# Runs as root inside the VM. Handles only system-level setup that the
-# user's dotfiles cannot do (packages, groups, services, hardware checks).
-# Languages, dot configs, editors and Android SDK come from dotfiles via
-# the DOTFILES_BOOTSTRAP hook.
+# Runs as root inside the VM. Handles only system-level setup
+# (packages, groups, services, hardware checks). Everything user-level
+# (languages, dot configs, editors, Android SDK) is done manually
+# after first login.
 
 set -euo pipefail
 
@@ -78,15 +78,6 @@ if [ -n "$GUEST_USER" ] && id "$GUEST_USER" >/dev/null 2>&1; then
         || log_warning "Could not pre-enable GNOME RDP. Enable it on first login: Settings > System > Remote Desktop."
 else
     log_warning "No guest user resolved; skipping kvm group and RDP setup."
-fi
-
-if [ -z "${DOTFILES_BOOTSTRAP:-}" ]; then
-    log_info "DOTFILES_BOOTSTRAP not set; skipping user environment setup."
-elif [ -x "$DOTFILES_BOOTSTRAP" ]; then
-    log_step "Running dotfiles bootstrap as $GUEST_USER..."
-    su -s /bin/bash "$GUEST_USER" -c "bash $DOTFILES_BOOTSTRAP"
-else
-    log_warning "DOTFILES_BOOTSTRAP=$DOTFILES_BOOTSTRAP is not executable; skipping user environment setup."
 fi
 
 check_kvm

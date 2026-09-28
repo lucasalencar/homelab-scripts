@@ -163,20 +163,8 @@ ssh_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$PROVI
 log_step "Pushing guest provision script..."
 scp "${ssh_opts[@]}" "$SCRIPT_DIR/provision.sh" "$CI_USER@$vm_ip:/tmp/coding-vm-provision.sh"
 
-guest_bootstrap=""
-if [ -n "${DOTFILES_BOOTSTRAP:-}" ]; then
-    if [ -f "${DOTFILES_BOOTSTRAP:-}" ]; then
-        log_step "Pushing dotfiles bootstrap..."
-        scp "${ssh_opts[@]}" "$DOTFILES_BOOTSTRAP" "$CI_USER@$vm_ip:/tmp/coding-vm-dotfiles-bootstrap"
-        guest_bootstrap="/tmp/coding-vm-dotfiles-bootstrap"
-    else
-        log_info "DOTFILES_BOOTSTRAP is not a local file; assuming guest-side path."
-        guest_bootstrap="$DOTFILES_BOOTSTRAP"
-    fi
-fi
-
 log_step "Running guest provisioning..."
-ssh "${ssh_opts[@]}" "$CI_USER@$vm_ip" sudo env "DOTFILES_BOOTSTRAP=$guest_bootstrap" "CODING_VM_USER=$CI_USER" bash /tmp/coding-vm-provision.sh
+ssh "${ssh_opts[@]}" "$CI_USER@$vm_ip" sudo env "CODING_VM_USER=$CI_USER" bash /tmp/coding-vm-provision.sh
 
 log_step "Validating guest (KVM, ssh)..."
 ssh "${ssh_opts[@]}" "$CI_USER@$vm_ip" sudo bash /tmp/coding-vm-provision.sh --check-only
