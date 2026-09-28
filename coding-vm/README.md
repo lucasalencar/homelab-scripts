@@ -35,23 +35,12 @@ scp ~/.ssh/code.pub <proxmox-user>@<proxmox-ip>:~/code-mac.pub
 ### 2. Create and provision the VM (on Proxmox, as root)
 
 ```bash
-./coding-vm/install.sh
-```
-
-No options needed if you followed step 1: the install finds
-`~/code-mac.pub` in the primary user's home on its own. (Run with `sudo`
-from your normal user; never rely on bare `$HOME` in these commands —
-under sudo it is `/root`, not your home.)
-
-With options (always absolute paths for the same reason):
-
-```bash
 CODING_VM_SSH_PUBKEY_FILE=/home/<user>/code-mac.pub ./coding-vm/install.sh
 ```
 
-The install prints the VM IP at the end. Without `CODING_VM_SSH_PUBKEY_FILE`
-the install still succeeds, but your key is not injected — follow the
-recovery hint it prints.
+The key is required (run with `sudo` from your normal user; always absolute
+paths — under sudo bare `$HOME` is `/root`, not your home). The install
+prints the VM IP at the end.
 
 ### 3. Set up SSH from your Mac (on the Mac, as your user)
 
@@ -78,8 +67,6 @@ ssh code
 - VS Code: Remote-SSH > Connect to Host > `code`.
 - RDP (GUI tests): `<vm-ip>:3389`, GNOME Remote Desktop (LAN only).
 - Fallback: Proxmox noVNC console.
-- No user key injected in step 2? Add it from the host with:
-  `qm guest exec <id> -- bash -c "echo 'PUBKEY' >> /home/<user>/.ssh/authorized_keys"`.
 
 After first login, set up your environment manually (languages, editors,
 Android SDK): the system base (desktop, KVM, SSH, RDP) is already in place.
@@ -109,7 +96,7 @@ All overrides: `CODING_VM_NAME`, `CODING_VM_CORES`, `CODING_VM_MEMORY_MB`,
   `/root/.ssh/coding-vm-code`): generated on first run, used only by
   `install.sh` for `scp`/`ssh` provisioning. The Proxmox host needs no
   user access beyond this.
-- **Your key** (`CODING_VM_SSH_PUBKEY_FILE`): your Mac's `~/.ssh/code.pub`
-  copied to the host. Injected via cloud-init alongside the provisioning
-  key, so login works immediately (Ubuntu cloud images lock password
-  login, so adding the key later may require console access).
+- **Your key** (`CODING_VM_SSH_PUBKEY_FILE`, required): your Mac's
+  `~/.ssh/code.pub` copied to the host. Injected via cloud-init alongside
+  the provisioning key, so login works immediately (Ubuntu cloud images
+  lock password login, so there is no later fallback).

@@ -71,19 +71,15 @@ CI_USER="${CODING_VM_CI_USER:-$PRIMARY_USER}"
 log_info "Cloud-init user: $CI_USER"
 
 USER_PUBKEY_FILE="${CODING_VM_SSH_PUBKEY_FILE:-}"
-if [ -n "$USER_PUBKEY_FILE" ] && [ ! -f "$USER_PUBKEY_FILE" ]; then
+if [ -z "$USER_PUBKEY_FILE" ]; then
+    log_error "CODING_VM_SSH_PUBKEY_FILE is required (copy your Mac key to the host first, see README)."
+    exit 1
+fi
+if [ ! -f "$USER_PUBKEY_FILE" ]; then
     log_error "CODING_VM_SSH_PUBKEY_FILE=$USER_PUBKEY_FILE does not exist."
     exit 1
 fi
-if [ -z "$USER_PUBKEY_FILE" ]; then
-    primary_home=$(get_primary_user_home) || exit 1
-    for candidate in "$primary_home/code-mac.pub" "$primary_home/.ssh/id_ed25519.pub" "$primary_home/.ssh/id_rsa.pub" "$primary_home/.ssh/id_ecdsa.pub"; do
-        if [ -f "$candidate" ]; then
-            USER_PUBKEY_FILE="$candidate"
-            break
-        fi
-    done
-fi
+log_info "Injecting user key: $USER_PUBKEY_FILE"
 
 PROVISION_KEY_FILE="${CODING_VM_PROVISION_KEY_FILE:-/root/.ssh/coding-vm-$VM_NAME}"
 if [ ! -f "$PROVISION_KEY_FILE" ]; then
@@ -94,13 +90,7 @@ fi
 
 combined_keys=$(mktemp)
 cat "$PROVISION_KEY_FILE.pub" > "$combined_keys"
-if [ -n "$USER_PUBKEY_FILE" ]; then
-    log_info "Injecting user key: $USER_PUBKEY_FILE"
-    cat "$USER_PUBKEY_FILE" >> "$combined_keys"
-else
-    log_warning "No user SSH key injected (set CODING_VM_SSH_PUBKEY_FILE with your Mac key)."
-    log_warning "Add it later via ssh-setup.sh (needs password auth) or: qm guest exec <id> -- bash -c \"echo 'PUBKEY' >> /home/$CI_USER/.ssh/authorized_keys\""
-fi
+cat "$USER_PUBKEY_FILE" >> "$combined_keys"
 
 mkdir -p "$IMAGE_DIR"
 image_file="$IMAGE_DIR/$(basename "$IMAGE_URL")"
