@@ -95,5 +95,15 @@ Never hardcode them in scripts, docs, or examples: resolve them dynamically
 (`get_primary_user`, `get_all_users`, `get_primary_user_home`) or use `<user>`
 placeholders. System/application accounts owned by a service (e.g.
 `qbittorrent`) and test fixtures (`testuser`) are not people and are exempt.
-Locked by `tests/unit/no-hardcoded-users.bats` (`.server_users` stays
-gitignored; committed files must not contain its usernames).
+Never create, modify, overwrite, or delete the `.server_users` file itself:
+not from scripts under test, not from test setup/teardown, and never via
+shell cleanup (`rm -f`), even when it looks like fixture data. Tests resolve
+the registry exclusively through `SERVER_USERS_FILE` pointed at
+`$MOCK_TMPDIR`. (Production scripts `001-root-setup.sh` and
+`005-add-secondary-user.sh` own the real file on the Proxmox host; that is
+their job, not tests' or agents'.)
+Locked by `tests/unit/no-hardcoded-users.bats` and
+`tests/unit/server-users-hermetic.bats` (`.server_users` stays gitignored;
+committed files must not contain its usernames), plus hard `deny` rules in
+`opencode.json` (`edit` on the path; shell `rm`/`mv`/`unlink`/`shred`/`cp`/
+`tee`/redirect/`git clean -f` touching it). Do not weaken those rules.

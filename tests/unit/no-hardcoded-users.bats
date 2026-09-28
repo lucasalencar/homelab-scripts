@@ -9,11 +9,6 @@ setup() {
   export REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
 }
 
-@test ".server_users stays gitignored" {
-  run git -C "$REPO_ROOT" check-ignore -q .server_users
-  [ "$status" -eq 0 ]
-}
-
 @test "committed files contain no .server_users username" {
   if [ ! -f "$REPO_ROOT/.server_users" ]; then
     skip ".server_users absent (e.g. CI)"
