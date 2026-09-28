@@ -18,16 +18,17 @@ System base only — languages, editors and Android SDK come from dotfiles.
 
 - Proxmox host `marx` with nested virtualization enabled and room on
   `local-lvm` (~80 GB by default).
-- On your Mac: an SSH key for the VM (`~/.ssh/code`, see step 2 if you
-  don't have one yet).
+- Your Mac (client) reachable to the Proxmox host over SSH.
 
-### 1. Copy your Mac public key to the Proxmox host (on the Mac)
+### 1. Prepare your Mac key and copy it to the Proxmox host (on the Mac)
 
 ```bash
+# Generate once (skip if ~/.ssh/code already exists)
+ssh-keygen -t ed25519 -f ~/.ssh/code -N ""
+
+# Copy the public key to the Proxmox host
 scp ~/.ssh/code.pub root@<proxmox-ip>:/root/code-mac.pub
 ```
-
-Skip only if you plan to add access later (see step 4).
 
 ### 2. Create and provision the VM (on Proxmox, as root)
 
