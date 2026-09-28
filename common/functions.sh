@@ -350,7 +350,7 @@ get_vm_ip() {
     local ip
     ip=$(qm guest exec "$vmid" -- hostname -I 2>/dev/null | jq -r '.["out-data"] // .["out"] // empty' | awk '{print $1}' || true)
     if [ -z "$ip" ]; then
-        ip=$(qm config "$vmid" 2>/dev/null | grep -oP 'ipconfig\d:\s*ip=\K[^/]+' | head -1 || true)
+        ip=$(qm config "$vmid" 2>/dev/null | grep -oP 'ipconfig\d:\s*ip=\K[^/]+' | grep -v '^dhcp' | head -1 || true)
     fi
     echo "$ip"
 }

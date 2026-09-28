@@ -58,7 +58,7 @@ ssh-copy-id -i "$KEY_PATH" "$vm_user@$vm_ip"
 
 ssh_config="$HOME/.ssh/config"
 touch "$ssh_config"
-if ! grep -q "^Host $HOST_ALIAS$" "$ssh_config"; then
+if ! grep -qFx "Host $HOST_ALIAS" "$ssh_config"; then
     {
         printf '\nHost %s\n' "$HOST_ALIAS"
         printf '    HostName %s\n' "$vm_ip"
@@ -67,7 +67,17 @@ if ! grep -q "^Host $HOST_ALIAS$" "$ssh_config"; then
     } >> "$ssh_config"
     log_success "SSH config entry '$HOST_ALIAS' added to $ssh_config"
 else
-    log_info "SSH config entry '$HOST_ALIAS' already present."
+    tmp_config=$(mktemp)
+    awk -v alias="$HOST_ALIAS" -v ip="$vm_ip" -v user="$vm_user" -v key="$KEY_PATH" '
+        $1 == "Host" && $2 == alias { inblock = 1; print; next }
+        inblock && $1 == "Host" { inblock = 0 }
+        inblock && $1 == "HostName" { print "    HostName " ip; next }
+        inblock && $1 == "User" { print "    User " user; next }
+        inblock && $1 == "IdentityFile" { print "    IdentityFile " key; next }
+        { print }
+    ' "$ssh_config" > "$tmp_config" && cat "$tmp_config" > "$ssh_config"
+    rm -f "$tmp_config"
+    log_info "SSH config entry '$HOST_ALIAS' updated (HostName $vm_ip)."
 fi
 
 if [[ "${CODING_VM_SSH_SETUP_NO_CONNECT:-0}" != "1" ]]; then

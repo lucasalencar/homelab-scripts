@@ -8,6 +8,8 @@
 
 set -euo pipefail
 
+# Self-contained log helpers: provision.sh is scp'd to the guest, so it must
+# not source common/functions.sh. Keep these in sync intentionally.
 log_step() { echo ">>> $*"; }
 log_info() { echo "--- $*"; }
 log_success() { echo "OK: $*"; }
@@ -43,15 +45,15 @@ check_kvm() {
     log_success "KVM acceleration available ($KVM_DEVICE)."
 }
 
-check_remote_access() {
-    log_step "Checking remote access services..."
+check_ssh() {
+    log_step "Checking ssh service..."
     systemctl is-active --quiet ssh || { log_error "ssh service is not active."; exit 1; }
     log_success "ssh service is active."
 }
 
 if [ "$CHECK_ONLY" = "1" ]; then
     check_kvm
-    check_remote_access
+    check_ssh
     log_success "All guest checks passed."
     exit 0
 fi
@@ -81,6 +83,6 @@ else
 fi
 
 check_kvm
-check_remote_access
+check_ssh
 
 log_success "Guest provisioning complete."

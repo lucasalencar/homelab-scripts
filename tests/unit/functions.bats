@@ -260,6 +260,15 @@ second" ]
   [ "$output" = "192.168.1.50" ]
 }
 
+@test "get_vm_ip returns empty when qm config is dhcp" {
+  export MOCK_QM_GUEST_HOSTNAME_I=""
+  export MOCK_QM_GUEST_EXEC_OUTPUT='{"out-data": "", "exitcode": 0}'
+  export MOCK_QM_CONFIG="ipconfig0: ip=dhcp,ip6=dhcp"
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; get_vm_ip 200'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 @test "get_container_ip returns IP from pct exec" {
   export MOCK_PCT_EXEC_HOSTNAME_I="10.0.0.5 10.0.0.6"
   # wait_container_ready should succeed (pct exec -- true returns 0)

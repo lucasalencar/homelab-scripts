@@ -50,7 +50,7 @@ if [ -z "$BRIDGE" ]; then
     BRIDGE=$(detect_pve_bridge)
 fi
 log_info "Using bridge: $BRIDGE"
-if ! ip -o link show 2>/dev/null | grep -q "$BRIDGE"; then
+if ! ip -o link show 2>/dev/null | grep -qF -- "$BRIDGE"; then
     log_error "Network bridge '$BRIDGE' not found on this host."
     exit 1
 fi
@@ -86,11 +86,19 @@ if [ ! -f "$PROVISION_KEY_FILE" ]; then
     log_step "Generating host provisioning key..."
     mkdir -p "$(dirname "$PROVISION_KEY_FILE")"
     ssh-keygen -t ed25519 -f "$PROVISION_KEY_FILE" -N "" -C "coding-vm-$VM_NAME-provision"
+elif [ ! -f "$PROVISION_KEY_FILE.pub" ]; then
+    log_error "Provisioning key $PROVISION_KEY_FILE exists but $PROVISION_KEY_FILE.pub is missing. Delete both or restore the .pub, then re-run."
+    exit 1
 fi
 
 combined_keys=$(mktemp)
-cat "$PROVISION_KEY_FILE.pub" > "$combined_keys"
-cat "$USER_PUBKEY_FILE" >> "$combined_keys"
+trap 'rm -f "$combined_keys"' EXIT
+{
+    cat "$PROVISION_KEY_FILE.pub"
+    printf '\n'
+    cat "$USER_PUBKEY_FILE"
+    printf '\n'
+} > "$combined_keys"
 
 mkdir -p "$IMAGE_DIR"
 image_file="$IMAGE_DIR/$(basename "$IMAGE_URL")"
@@ -162,5 +170,5 @@ ssh "${ssh_opts[@]}" "$CI_USER@$vm_ip" sudo bash /tmp/coding-vm-provision.sh --c
 echo ""
 log_success "Coding VM '$VM_NAME' (ID: $vmid, IP: $vm_ip) is ready."
 log_info "SSH: ssh $CI_USER@$vm_ip (VS Code Remote-SSH)"
-log_info "RDP: $vm_ip:3389 (LAN only, GNOME Remote Desktop)"
+log_info "RDP: $vm_ip:3389 (LAN only; if refused, enable in Settings > System > Remote Desktop on first login)"
 log_info "SSH/RDP are plain TCP; no Caddy entry needed."

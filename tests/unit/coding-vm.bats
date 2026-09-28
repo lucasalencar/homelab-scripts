@@ -134,6 +134,17 @@ EOF
   ! grep -q "^qm create" "$MOCK_LOG"
 }
 
+@test "coding-vm install fails clearly when provisioning .pub is missing" {
+  _install_env
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  home-assistant       running    4096              32.00 12345'
+  touch "$CODING_VM_PROVISION_KEY_FILE"
+  rm -f "$CODING_VM_PROVISION_KEY_FILE.pub"
+  run bash "$REPO_ROOT/coding-vm/install.sh"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *".pub"* ]]
+  ! grep -q "^qm create" "$MOCK_LOG"
+}
+
 @test "coding-vm install fails when bridge is missing" {
   _install_env
   export MOCK_IP_LINK_SHOW="1: lo: <LOOPBACK> mtu 65536"
@@ -223,9 +234,41 @@ EOF
   [[ "$output" == *"IP"* ]]
 }
 
+@test "coding-vm ssh-setup updates HostName on re-run with new IP" {
+  export HOME="$MOCK_TMPDIR/home"
+  mkdir -p "$HOME/.ssh"
+  for mock in ssh-keygen ssh-copy-id; do
+    chmod +x "$BATS_TEST_DIRNAME/../helpers/mocks/$mock"
+  done
+  run bash "$REPO_ROOT/coding-vm/ssh-setup.sh" "testuser@10.0.0.10"
+  [ "$status" -eq 0 ]
+  run bash "$REPO_ROOT/coding-vm/ssh-setup.sh" "testuser@10.0.0.99"
+  [ "$status" -eq 0 ]
+  grep -q "HostName 10.0.0.99" "$HOME/.ssh/config"
+  [ "$(grep -c "^Host code$" "$HOME/.ssh/config")" -eq 1 ]
+}
+
 @test "coding-vm provision check-only aborts without KVM device" {
   export CODING_VM_TEST_MODE="1"
   export CODING_VM_KVM_DEVICE="$MOCK_TMPDIR/no-kvm-here"
+  run bash "$REPO_ROOT/coding-vm/provision.sh" --check-only
+  [ "$status" -ne 0 ]
+}
+
+@test "coding-vm provision check-only fails when kvm-ok fails" {
+  touch "$MOCK_TMPDIR/kvm"
+  export CODING_VM_TEST_MODE="1"
+  export CODING_VM_KVM_DEVICE="$MOCK_TMPDIR/kvm"
+  export MOCK_KVM_OK_FAIL="1"
+  run bash "$REPO_ROOT/coding-vm/provision.sh" --check-only
+  [ "$status" -ne 0 ]
+}
+
+@test "coding-vm provision check-only fails when ssh inactive" {
+  touch "$MOCK_TMPDIR/kvm"
+  export CODING_VM_TEST_MODE="1"
+  export CODING_VM_KVM_DEVICE="$MOCK_TMPDIR/kvm"
+  export MOCK_SYSTEMCTL_FAIL="1"
   run bash "$REPO_ROOT/coding-vm/provision.sh" --check-only
   [ "$status" -ne 0 ]
 }

@@ -69,7 +69,10 @@ ssh code
 - Fallback: Proxmox noVNC console.
 
 After first login, set up your environment manually (languages, editors,
-Android SDK): the system base (desktop, KVM, SSH, RDP) is already in place.
+Android SDK): the system base (desktop, KVM, SSH) is already in place.
+RDP (GNOME Remote Desktop) is enabled best-effort via `grdctl` during
+provisioning — headless enable can fail with no GNOME session, in which
+case enable it on first login: Settings > System > Remote Desktop.
 
 ### Ongoing: updates (on Proxmox, as root)
 
@@ -89,6 +92,10 @@ All overrides: `CODING_VM_NAME`, `CODING_VM_CORES`, `CODING_VM_MEMORY_MB`,
 `CODING_VM_BRIDGE`, `CODING_VM_CI_USER`, `CODING_VM_SSH_PUBKEY_FILE`,
 `CODING_VM_PROVISION_KEY_FILE`, `CODING_VM_IMAGE_URL`, `CODING_VM_IMAGE_DIR`,
 `CODING_VM_WAIT_TIMEOUT`, `CODING_VM_MIN_IMAGE_BYTES`, `CODING_VM_SSH_ALIAS`.
+
+Custom `CODING_VM_IMAGE_URL` must keep the Ubuntu-cloud layout (a sibling
+`SHA256SUMS` file in the same directory with a matching entry), or set
+`CODING_VM_SKIP_CHECKSUM=1`.
 
 ## SSH keys (two identities)
 
