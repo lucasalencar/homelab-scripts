@@ -18,7 +18,6 @@ BRIDGE="${CODING_VM_BRIDGE:-}"
 IMAGE_URL="${CODING_VM_IMAGE_URL:-https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img}"
 IMAGE_DIR="${CODING_VM_IMAGE_DIR:-/var/lib/vz/template/iso}"
 WAIT_TIMEOUT="${CODING_VM_WAIT_TIMEOUT:-300}"
-SSH_PUBKEY_FILE="${CODING_VM_SSH_PUBKEY_FILE:-}"
 
 log_step "Starting coding VM ($VM_NAME) installation..."
 
@@ -70,20 +69,37 @@ PRIMARY_USER=$(get_primary_user) || exit 1
 CI_USER="${CODING_VM_CI_USER:-$PRIMARY_USER}"
 log_info "Cloud-init user: $CI_USER"
 
-if [ -z "$SSH_PUBKEY_FILE" ]; then
+USER_PUBKEY_FILE="${CODING_VM_SSH_PUBKEY_FILE:-}"
+if [ -n "$USER_PUBKEY_FILE" ] && [ ! -f "$USER_PUBKEY_FILE" ]; then
+    log_error "CODING_VM_SSH_PUBKEY_FILE=$USER_PUBKEY_FILE does not exist."
+    exit 1
+fi
+if [ -z "$USER_PUBKEY_FILE" ]; then
     primary_home=$(get_primary_user_home) || exit 1
     for candidate in "$primary_home/.ssh/id_ed25519.pub" "$primary_home/.ssh/id_rsa.pub" "$primary_home/.ssh/id_ecdsa.pub"; do
         if [ -f "$candidate" ]; then
-            SSH_PUBKEY_FILE="$candidate"
+            USER_PUBKEY_FILE="$candidate"
             break
         fi
     done
 fi
-if [ -z "$SSH_PUBKEY_FILE" ] || [ ! -f "$SSH_PUBKEY_FILE" ]; then
-    log_error "No SSH public key found. Set CODING_VM_SSH_PUBKEY_FILE."
-    exit 1
+
+PROVISION_KEY_FILE="${CODING_VM_PROVISION_KEY_FILE:-/root/.ssh/coding-vm-$VM_NAME}"
+if [ ! -f "$PROVISION_KEY_FILE" ]; then
+    log_step "Generating host provisioning key..."
+    mkdir -p "$(dirname "$PROVISION_KEY_FILE")"
+    ssh-keygen -t ed25519 -f "$PROVISION_KEY_FILE" -N "" -C "coding-vm-$VM_NAME-provision"
 fi
-log_info "Using SSH key: $SSH_PUBKEY_FILE"
+
+combined_keys=$(mktemp)
+cat "$PROVISION_KEY_FILE.pub" > "$combined_keys"
+if [ -n "$USER_PUBKEY_FILE" ]; then
+    log_info "Injecting user key: $USER_PUBKEY_FILE"
+    cat "$USER_PUBKEY_FILE" >> "$combined_keys"
+else
+    log_warning "No user SSH key injected (set CODING_VM_SSH_PUBKEY_FILE with your Mac key)."
+    log_warning "Add it later via ssh-setup.sh (needs password auth) or: qm guest exec <id> -- bash -c \"echo 'PUBKEY' >> /home/$CI_USER/.ssh/authorized_keys\""
+fi
 
 mkdir -p "$IMAGE_DIR"
 image_file="$IMAGE_DIR/$(basename "$IMAGE_URL")"
@@ -118,7 +134,8 @@ qm importdisk "$vmid" "$image_file" "$STORAGE"
 qm set "$vmid" --scsi0 "$STORAGE:vm-$vmid-disk-0"
 qm set "$vmid" --ide2 "$STORAGE:cloudinit"
 qm set "$vmid" --boot order=scsi0 --serial0 socket
-qm set "$vmid" --ciuser "$CI_USER" --sshkeys "$SSH_PUBKEY_FILE" --ipconfig0 ip=dhcp
+qm set "$vmid" --ciuser "$CI_USER" --sshkeys "$combined_keys" --ipconfig0 ip=dhcp
+rm -f "$combined_keys"
 qm resize "$vmid" scsi0 "${DISK_GB}G"
 
 log_step "Starting VM $vmid..."
@@ -142,7 +159,7 @@ if [ -z "$vm_ip" ]; then
 fi
 log_info "VM IP: $vm_ip"
 
-ssh_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
+ssh_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$PROVISION_KEY_FILE")
 log_step "Pushing guest provision script..."
 scp "${ssh_opts[@]}" "$SCRIPT_DIR/provision.sh" "$CI_USER@$vm_ip:/tmp/coding-vm-provision.sh"
 

@@ -38,19 +38,40 @@ ssh code
 ## Examples
 
 ```bash
-# On Proxmox as root, base install (no dotfiles hook)
+# On Proxmox as root, base install (no dotfiles hook, no user key)
 ./coding-vm/install.sh
 
-# With your dotfiles bootstrap (local file on the host is copied into the guest)
-DOTFILES_BOOTSTRAP="$HOME/dotfiles/bootstrap.sh" ./coding-vm/install.sh
+# Full flow with access from your Mac:
+# 1. On the Mac, copy its public key to the Proxmox host
+scp ~/.ssh/code.pub root@<proxmox-ip>:/root/code-mac.pub
+# 2. On Proxmox as root, install with your Mac key + dotfiles hook
+CODING_VM_SSH_PUBKEY_FILE=/root/code-mac.pub \
+  DOTFILES_BOOTSTRAP="$HOME/dotfiles/bootstrap.sh" ./coding-vm/install.sh
+# 3. Back on the Mac, write the ssh config entry
+./coding-vm/ssh-setup.sh <vm-ip>
+ssh code
 
 # Custom sizing / storage / key
 CODING_VM_CORES=6 CODING_VM_MEMORY_MB=8192 CODING_VM_DISK_GB=60 \
-  CODING_VM_SSH_PUBKEY_FILE="$HOME/.ssh/id_ed25519.pub" ./coding-vm/install.sh
+  CODING_VM_SSH_PUBKEY_FILE=/root/code-mac.pub ./coding-vm/install.sh
 
 # Validate an existing guest without reinstalling
 ./coding-vm/update.sh
 ```
+
+## SSH keys (two identities)
+
+- **Host provisioning key** (`CODING_VM_PROVISION_KEY_FILE`, default
+  `/root/.ssh/coding-vm-code`): generated on first run, used only by
+  `install.sh` for `scp`/`ssh` provisioning. The Proxmox host needs no
+  user access beyond this.
+- **Your key** (`CODING_VM_SSH_PUBKEY_FILE`): your Mac's `~/.ssh/code.pub`
+  copied to the host. Injected via cloud-init alongside the provisioning
+  key, so login works immediately (Ubuntu cloud images lock password
+  login, so adding the key later may require console access).
+
+Without a user key the install still succeeds, but follow the `qm guest
+exec` recovery hint it prints, or re-create the VM with the key set.
 
 `DOTFILES_BOOTSTRAP` is an executable script that `provision.sh` runs as the
 cloud-init user after the system setup. If it is a file on the Proxmox host,

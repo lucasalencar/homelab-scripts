@@ -34,6 +34,7 @@ _install_env() {
   export CODING_VM_SKIP_CHECKSUM="1"
   export CODING_VM_WAIT_TIMEOUT="1"
   export CODING_VM_SSH_PUBKEY_FILE="$MOCK_TMPDIR/testkey.pub"
+  export CODING_VM_PROVISION_KEY_FILE="$MOCK_TMPDIR/provision-key"
 }
 
 # -------------------------------------------------------------------
@@ -70,6 +71,26 @@ _install_env() {
   grep -q "^scp " "$MOCK_LOG"
   grep -q "^ssh " "$MOCK_LOG"
   grep -q "cpu.*host" "$MOCK_LOG"
+}
+
+@test "coding-vm install uses a dedicated host provisioning key" {
+  _install_env
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  home-assistant       running    4096              32.00 12345'
+  run bash "$REPO_ROOT/coding-vm/install.sh"
+  [ "$status" -eq 0 ]
+  grep -q "^ssh-keygen" "$MOCK_LOG"
+  grep -qF -- "-i $MOCK_TMPDIR/provision-key" "$MOCK_LOG"
+  grep -q -- "--sshkeys" "$MOCK_LOG"
+}
+
+@test "coding-vm install warns but continues without a user key" {
+  _install_env
+  unset CODING_VM_SSH_PUBKEY_FILE
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  home-assistant       running    4096              32.00 12345'
+  run bash "$REPO_ROOT/coding-vm/install.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"No user SSH key"* ]]
+  grep -q -- "--sshkeys" "$MOCK_LOG"
 }
 
 @test "coding-vm install forwards dotfiles bootstrap file to guest" {
