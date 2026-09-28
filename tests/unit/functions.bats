@@ -304,6 +304,23 @@ net0: name=eth0,bridge=vmbr0,ip=10.0.0.99/24,ip=10.0.0.99"
 }
 
 # -------------------------------------------------------------------
+# wait_vm_ready
+# -------------------------------------------------------------------
+
+@test "wait_vm_ready succeeds when guest agent responds" {
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; wait_vm_ready 100 2 0; echo ok'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ok"* ]]
+}
+
+@test "wait_vm_ready times out when guest agent not responsive" {
+  export MOCK_QM_GUEST_FAIL=1
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; wait_vm_ready 999 2 0'
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not responsive"* ]]
+}
+
+# -------------------------------------------------------------------
 # get_host_uid
 # -------------------------------------------------------------------
 

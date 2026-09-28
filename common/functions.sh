@@ -312,6 +312,27 @@ wait_container_ready() {
     return 1
 }
 
+# Waits until a VM responds to qm guest exec commands.
+# Usage: wait_vm_ready <vmid> [max_attempts] [sleep_seconds]
+# Returns 0 if ready, 1 if timed out.
+wait_vm_ready() {
+    local vmid="${1:-}"
+    local max_attempts="${2:-60}"
+    local sleep_seconds="${3:-5}"
+    local attempt=1
+
+    while [ "$attempt" -le "$max_attempts" ]; do
+        if qm guest exec "$vmid" -- true 2>/dev/null; then
+            return 0
+        fi
+        sleep "$sleep_seconds"
+        attempt=$((attempt + 1))
+    done
+
+    log_error "VM $vmid not responsive after $((max_attempts * sleep_seconds))s"
+    return 1
+}
+
 # Returns the VM ID by its name (partial match, case-insensitive)
 # Usage: get_vm_id_by_name "name"
 get_vm_id_by_name() {

@@ -137,16 +137,10 @@ qm resize "$vmid" scsi0 "${DISK_GB}G"
 log_step "Starting VM $vmid..."
 qm start "$vmid"
 
-log_step "Waiting for guest agent (timeout ${WAIT_TIMEOUT}s)..."
-elapsed=0
-until qm guest exec "$vmid" -- true 2>/dev/null; do
-    if [ "$elapsed" -ge "$WAIT_TIMEOUT" ]; then
-        log_error "Guest agent not ready after ${WAIT_TIMEOUT}s."
-        exit 1
-    fi
-    sleep 5
-    elapsed=$((elapsed + 5))
-done
+log_step "Waiting for guest agent (up to ${WAIT_TIMEOUT}s)..."
+# wait_vm_ready polls every WAIT_SLEEP_S seconds; attempts cover WAIT_TIMEOUT
+WAIT_SLEEP_S=5
+wait_vm_ready "$vmid" "$(( (WAIT_TIMEOUT + WAIT_SLEEP_S - 1) / WAIT_SLEEP_S ))" "$WAIT_SLEEP_S" || exit 1
 
 vm_ip=$(get_vm_ip "$vmid")
 if [ -z "$vm_ip" ]; then
