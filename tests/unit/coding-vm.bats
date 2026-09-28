@@ -28,6 +28,7 @@ _install_env() {
   export CODING_VM_WAIT_TIMEOUT="1"
   export CODING_VM_SSH_PUBKEY_FILE="$MOCK_TMPDIR/testkey.pub"
   export CODING_VM_PROVISION_KEY_FILE="$MOCK_TMPDIR/provision-key"
+  export CODING_VM_MIN_IMAGE_BYTES="0"
 }
 
 # -------------------------------------------------------------------
@@ -64,6 +65,17 @@ _install_env() {
   grep -q "^scp " "$MOCK_LOG"
   grep -q "^ssh " "$MOCK_LOG"
   grep -q "cpu.*host" "$MOCK_LOG"
+  grep -q "discard=on,ssd=1" "$MOCK_LOG"
+}
+
+@test "coding-vm install rejects a truncated image" {
+  _install_env
+  export CODING_VM_MIN_IMAGE_BYTES="104857600"
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  home-assistant       running    4096              32.00 12345'
+  run bash "$REPO_ROOT/coding-vm/install.sh"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"mage"* ]]
+  ! grep -q "^qm create" "$MOCK_LOG"
 }
 
 @test "coding-vm install uses a dedicated host provisioning key" {

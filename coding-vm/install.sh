@@ -18,6 +18,7 @@ BRIDGE="${CODING_VM_BRIDGE:-}"
 IMAGE_URL="${CODING_VM_IMAGE_URL:-https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img}"
 IMAGE_DIR="${CODING_VM_IMAGE_DIR:-/var/lib/vz/template/iso}"
 WAIT_TIMEOUT="${CODING_VM_WAIT_TIMEOUT:-300}"
+MIN_IMAGE_BYTES="${CODING_VM_MIN_IMAGE_BYTES:-104857600}"
 
 log_step "Starting coding VM ($VM_NAME) installation..."
 
@@ -124,6 +125,11 @@ if [ ! -f "$image_file" ]; then
     log_error "Image download failed."
     exit 1
 fi
+image_bytes=$(stat -c%s "$image_file" 2>/dev/null || echo 0)
+if [ "$image_bytes" -lt "$MIN_IMAGE_BYTES" ]; then
+    log_error "Image $image_file is too small ($image_bytes bytes, minimum $MIN_IMAGE_BYTES); likely truncated. Delete it and re-run."
+    exit 1
+fi
 
 log_step "Creating VM $vmid ($VM_NAME)..."
 qm create "$vmid" --name "$VM_NAME" \
@@ -131,7 +137,7 @@ qm create "$vmid" --name "$VM_NAME" \
     --cpu host --machine q35 --ostype l26 --scsihw virtio-scsi-pci \
     --net0 "virtio,bridge=$BRIDGE" --agent enabled=1 --onboot 0
 qm importdisk "$vmid" "$image_file" "$STORAGE"
-qm set "$vmid" --scsi0 "$STORAGE:vm-$vmid-disk-0"
+qm set "$vmid" --scsi0 "$STORAGE:vm-$vmid-disk-0,discard=on,ssd=1"
 qm set "$vmid" --ide2 "$STORAGE:cloudinit"
 qm set "$vmid" --boot order=scsi0 --serial0 socket
 qm set "$vmid" --ciuser "$CI_USER" --sshkeys "$combined_keys" --ipconfig0 ip=dhcp

@@ -3,11 +3,26 @@
 set -euo pipefail
 
 source "$(dirname "$0")/../mock_lib.sh"
-mock_log "grep" "$@"
+# Never trace searches of the mock log itself: appending the call line first
+# would make any `grep -q <pattern> $MOCK_LOG` assertion match its own trace
+# (vacuous pass). Exit-code semantics stay intact via the real grep below.
+trace=true
+if [ -n "${MOCK_LOG:-}" ]; then
+  for arg in "$@"; do
+    if [ "$arg" = "$MOCK_LOG" ]; then
+      trace=false
+      break
+    fi
+  done
+fi
+if $trace; then
+  mock_log "grep" "$@"
+fi
 
 has_P=false
 for arg in "$@"; do
-  if [[ "$arg" == *P* ]] && [[ "$arg" == -* ]]; then
+  [[ "$arg" == "--" ]] && break
+  if [[ "$arg" == "-P" || "$arg" == "--perl-regexp" || "$arg" =~ ^-[a-zA-Z]*P[a-zA-Z]*$ ]]; then
     has_P=true
     break
   fi
