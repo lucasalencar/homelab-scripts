@@ -6,24 +6,17 @@ setup() {
   export PATH="$BATS_TEST_DIRNAME/../helpers/mocks:$PATH"
   export REPO_ROOT="$BATS_TEST_DIRNAME/../.."
   export BASH_ENV="$BATS_TEST_DIRNAME/../helpers/bypass_root.sh"
+  # Hermetic user registry — scripts under test resolve .server_users here,
+  # never the real repo file.
+  export SERVER_USERS_FILE="$MOCK_TMPDIR/.server_users"
   for mock in ssh scp systemctl kvm-ok; do
     chmod +x "$BATS_TEST_DIRNAME/../helpers/mocks/$mock"
   done
-  if [ -f "$REPO_ROOT/.server_users" ]; then
-    cp "$REPO_ROOT/.server_users" "$MOCK_TMPDIR/.server_users.bak"
-  fi
-  echo "testuser" > "$REPO_ROOT/.server_users"
+  echo "testuser" > "$SERVER_USERS_FILE"
   echo "ssh-ed25519 AAAAC3Nzc2VudGVzdA== bats-test" > "$MOCK_TMPDIR/testkey.pub"
 }
 
 teardown() {
-  if [ -f "$MOCK_TMPDIR/.server_users.bak" ]; then
-    cp "$MOCK_TMPDIR/.server_users.bak" "$REPO_ROOT/.server_users"
-  elif [ -f "$REPO_ROOT/.server_users" ]; then
-    if grep -q "bats-test" "$REPO_ROOT/.server_users" 2>/dev/null || grep -q "testuser" "$REPO_ROOT/.server_users" 2>/dev/null; then
-      rm -f "$REPO_ROOT/.server_users"
-    fi
-  fi
   rm -rf "$MOCK_TMPDIR"
 }
 
