@@ -32,6 +32,9 @@ teardown() {
 @test "nextcloud install delegates to community script" {
   export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n101        running                 nextcloud'
   export MOCK_PCT_CONFIG="hostname: nextcloud"
+  # Hermetic: install chains into setup-storage.sh — keep it off real /tank
+  export NEXTCLOUD_MOUNT_PATH="$MOCK_TMPDIR/ncdata"
+  export NEXTCLOUD_DATASET="tank/data/nextcloud-test"
   # Mock required user lookup to avoid extra setup
   echo "testuser" > "$REPO_ROOT/.server_users"
   # Mock pct exec for occ etc. — default mock succeeds
@@ -75,12 +78,16 @@ teardown() {
   export MOCK_PCT_EXEC_OUTPUT="/mnt/ncdata"
   export MOCK_PCT_EXEC_HOSTNAME_I="10.0.0.6"
   export MOCK_ZFS_LIST_NOT_EXISTS=""
+  # Hermetic: point the host mount path at tmp so no real /tank is touched
+  export NEXTCLOUD_MOUNT_PATH="$MOCK_TMPDIR/ncdata"
+  export NEXTCLOUD_DATASET="tank/data/nextcloud-test"
   echo "testuser" > "$REPO_ROOT/.server_users"
   export MOCK_GETENT_PASSWD="testuser:x:1000:1000::/home/testuser:/bin/bash"
   export MOCK_ID_UID="1000"
   run bash "$REPO_ROOT/nextcloud/setup-storage.sh" 2>&1
   [ "$status" -eq 0 ]
   [[ "$output" == *"already exists"* ]] || [[ "$output" == *"Skipping mount setup"* ]]
+  [ -f "$NEXTCLOUD_MOUNT_PATH/.ncdata" ]
   ! grep -q "pct set 101 -mp1" "$MOCK_LOG" || true
 }
 

@@ -8,8 +8,8 @@ source "$SCRIPT_DIR/../common/functions.sh" || { echo "Error: failed to load com
 
 require_root
 
-DATASET="tank/data/nextcloud"
-MOUNT_PATH="/tank/data/nextcloud"
+DATASET="${NEXTCLOUD_DATASET:-tank/data/nextcloud}"
+MOUNT_PATH="${NEXTCLOUD_MOUNT_PATH:-/tank/data/nextcloud}"
 
 log_step "Starting Nextcloud storage setup..."
 echo ""
@@ -62,6 +62,7 @@ PRIMARY_USER=$(get_primary_user) || exit 1
 PRIMARY_UID=$(id -u "$PRIMARY_USER")
 log_step "Applying ACLs for www-data (UID $host_wwwdata_uid), container root (UID $CONTAINER_ROOT_UID), and $PRIMARY_USER (UID $PRIMARY_UID)..."
 
+mkdir -p "$MOUNT_PATH"
 echo "# Nextcloud data directory" > "$MOUNT_PATH/.ncdata"
 
 setup_dataset_acls "$DATASET" "$MOUNT_PATH" "$host_wwwdata_uid" "$PRIMARY_UID"
