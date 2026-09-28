@@ -8,8 +8,8 @@
 
 set -euo pipefail
 
-# Self-contained log helpers: provision.sh is scp'd to the guest, so it must
-# not source common/functions.sh. Keep these in sync intentionally.
+# Self-contained log helpers: this file is scp'd to the guest, so it cannot
+# source the shared helpers library. Keep these in sync intentionally.
 log_step() { echo ">>> $*"; }
 log_info() { echo "--- $*"; }
 log_success() { echo "OK: $*"; }
