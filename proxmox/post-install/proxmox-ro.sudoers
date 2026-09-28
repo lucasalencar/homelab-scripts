@@ -57,6 +57,15 @@ __SUDO_USER__ ALL=(root) NOPASSWD: \
     /usr/sbin/pvesm list, \
     /usr/sbin/pvesm scan
 
+# LVM — somente leitura (thinpool local-lvm)
+__SUDO_USER__ ALL=(root) NOPASSWD: \
+    /usr/sbin/lvs, \
+    /usr/sbin/vgs, \
+    /usr/sbin/pvs, \
+    /usr/sbin/lvdisplay, \
+    /usr/sbin/vgdisplay, \
+    /usr/sbin/pvdisplay
+
 # Node / Cert
 __SUDO_USER__ ALL=(root) NOPASSWD: \
     /usr/bin/pvenode acmedetails, \
