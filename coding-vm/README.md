@@ -26,14 +26,15 @@ System base only — languages, editors and Android SDK come from dotfiles.
 # Generate once (skip if ~/.ssh/code already exists)
 ssh-keygen -t ed25519 -f ~/.ssh/code -N ""
 
-# Copy the public key to the Proxmox host
-scp ~/.ssh/code.pub root@<proxmox-ip>:/root/code-mac.pub
+# Copy the public key to the Proxmox host (your normal user, not root —
+# root SSH login is disabled on the host)
+scp ~/.ssh/code.pub <proxmox-user>@<proxmox-ip>:~/code-mac.pub
 ```
 
 ### 2. Create and provision the VM (on Proxmox, as root)
 
 ```bash
-CODING_VM_SSH_PUBKEY_FILE=/root/code-mac.pub \
+CODING_VM_SSH_PUBKEY_FILE="$HOME/code-mac.pub" \
   DOTFILES_BOOTSTRAP="$HOME/dotfiles/bootstrap.sh" ./coding-vm/install.sh
 ```
 
@@ -80,7 +81,7 @@ ssh code
 
 ```bash
 CODING_VM_CORES=6 CODING_VM_MEMORY_MB=8192 CODING_VM_DISK_GB=60 \
-  CODING_VM_SSH_PUBKEY_FILE=/root/code-mac.pub ./coding-vm/install.sh
+  CODING_VM_SSH_PUBKEY_FILE="$HOME/code-mac.pub" ./coding-vm/install.sh
 ```
 
 All overrides: `CODING_VM_NAME`, `CODING_VM_CORES`, `CODING_VM_MEMORY_MB`,
