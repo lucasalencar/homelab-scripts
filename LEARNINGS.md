@@ -95,3 +95,4 @@
 
 - **Proxmox auto-ballooning squeezes VMs toward the `balloon` floor under host pressure:** when the host swaps, `pvestatd` inflates guests' balloons automatically (`memory` is the ceiling, `balloon` the floor). A wedged VM with plenty of `maxmem` headroom can still be starved — check `ballooninfo.actual`/`free_mem` in `status/current`, not just `mem` vs `maxmem`. Guest symptom: ~100MB free with GBs of configured RAM; host symptom: `update_balloon_size_func hogged CPU` in guest kernel log.
 - **Proxmox VM RRD `diskread`/`diskwrite` are bytes/sec rates:** mean × 86400 ≈ QMP `query-blockstats` lifetime bytes. Use this cross-check to confirm units before doing hourly math.
+- **`sar -d` uses a 12-hour clock (`09:00:00 PM`):** grepping for `21:` matches nothing. Match `PM`/`AM` in `$2` instead when filtering sadc logs.
