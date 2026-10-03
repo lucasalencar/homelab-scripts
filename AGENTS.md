@@ -10,6 +10,8 @@
 
 **Non-root user:** no restriction — proceed with normal caution.
 
+**Read-only sudo:** passwordless sudo is configured for read-only Proxmox introspection. In practice `sudo pvesh get *` works with any path (preferred for diagnosis), plus bare `sudo qm list`, `sudo pct list`, `sudo pveversion`, `sudo pvesm status/list/scan`, `sudo zfs list`, etc. — see `sudo -n -l` for the full allowlist. Caveat: `sudo qm/pct <cmd> <vmid>` with a VMID argument still prompts for a password; use the `pvesh` equivalent instead (e.g. `sudo pvesh get /nodes/<node>/qemu/<vmid>/config`, `sudo pvesh get /nodes/<node>/qemu/<vmid>/agent/network-get-interfaces`). Prefer these read-only commands for diagnosis instead of asking the user to run them manually. Destructive commands still require explicit approval per above.
+
 ### 2. OS check before any command
 
 - **macOS:** not on Proxmox — provide exact commands for the user to run manually.
