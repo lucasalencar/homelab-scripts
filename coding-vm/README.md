@@ -1,6 +1,6 @@
 # coding-vm
 
-Ubuntu Desktop 24.04 VM for coding.
+Ubuntu 24.04 VM for coding (headless by default, Desktop optional).
 System base only — languages, editors and Android SDK are installed manually
 after first login.
 
@@ -65,14 +65,15 @@ ssh code
 ```
 
 - VS Code: Remote-SSH > Connect to Host > `code`.
-- RDP (GUI tests): `<vm-ip>:3389`, GNOME Remote Desktop (LAN only).
+- RDP (headless, GNOME Remote Desktop system mode): `<vm-ip>:3389`.
+  Configured only when `CODING_VM_RDP_USER` + `CODING_VM_RDP_PASSWORD`
+  are set at provision time (password travels via scp'd env file, never
+  in ssh argv). Without them, enable on first login:
+  Settings > System > Remote Desktop.
 - Fallback: Proxmox noVNC console.
 
 After first login, set up your environment manually (languages, editors,
-Android SDK): the system base (desktop, KVM, SSH) is already in place.
-RDP (GNOME Remote Desktop) is enabled best-effort via `grdctl` during
-provisioning — headless enable can fail with no GNOME session, in which
-case enable it on first login: Settings > System > Remote Desktop.
+Android SDK): the system base (KVM, SSH) is already in place.
 
 ### Ongoing: updates (on Proxmox, as root)
 
@@ -91,7 +92,29 @@ All overrides: `CODING_VM_NAME`, `CODING_VM_CORES`, `CODING_VM_MEMORY_MB`,
 `CODING_VM_BALLOON_MB`, `CODING_VM_DISK_GB`, `CODING_VM_STORAGE`,
 `CODING_VM_BRIDGE`, `CODING_VM_CI_USER`, `CODING_VM_SSH_PUBKEY_FILE`,
 `CODING_VM_PROVISION_KEY_FILE`, `CODING_VM_IMAGE_URL`, `CODING_VM_IMAGE_DIR`,
-`CODING_VM_WAIT_TIMEOUT`, `CODING_VM_MIN_IMAGE_BYTES`, `CODING_VM_SSH_ALIAS`.
+`CODING_VM_WAIT_TIMEOUT`, `CODING_VM_MIN_IMAGE_BYTES`, `CODING_VM_SSH_ALIAS`,
+`CODING_VM_GUI`, `CODING_VM_RDP_USER`, `CODING_VM_RDP_PASSWORD`,
+`CODING_VM_RDP_CERT_DIR`.
+
+Headless is the default (no desktop, no RDP — SSH/VS Code only):
+
+```bash
+CODING_VM_SSH_PUBKEY_FILE=/home/<user>/code-mac.pub ./coding-vm/install.sh
+```
+
+With desktop + RDP (~1GB extra RAM):
+
+```bash
+CODING_VM_GUI=1 CODING_VM_RDP_USER=rdpuser CODING_VM_RDP_PASSWORD='...' \
+  CODING_VM_SSH_PUBKEY_FILE=/home/<user>/code-mac.pub ./coding-vm/install.sh
+```
+
+RDP requires the desktop (`CODING_VM_GUI=1`).
+
+```bash
+CODING_VM_RDP_USER=rdpuser CODING_VM_RDP_PASSWORD='...' \
+  CODING_VM_SSH_PUBKEY_FILE=/home/<user>/code-mac.pub ./coding-vm/install.sh
+```
 
 Custom `CODING_VM_IMAGE_URL` must keep the Ubuntu-cloud layout (a sibling
 `SHA256SUMS` file in the same directory with a matching entry), or set

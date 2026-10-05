@@ -9,7 +9,7 @@ setup() {
   # Hermetic user registry — scripts under test resolve .server_users here,
   # never the real repo file.
   export SERVER_USERS_FILE="$MOCK_TMPDIR/.server_users"
-  for mock in ssh scp systemctl kvm-ok; do
+  for mock in ssh scp systemctl kvm-ok grdctl apt-get chown openssl; do
     chmod +x "$BATS_TEST_DIRNAME/../helpers/mocks/$mock"
   done
   echo "testuser" > "$SERVER_USERS_FILE"
@@ -293,4 +293,215 @@ EOF
   export MOCK_SYSTEMCTL_FAIL="1"
   run bash "$REPO_ROOT/coding-vm/provision.sh" --check-only
   [ "$status" -ne 0 ]
+}
+
+# -------------------------------------------------------------------
+# coding-vm/provision.sh system RDP (grdctl --system, headless-safe)
+# -------------------------------------------------------------------
+
+@test "coding-vm provision skips system RDP without credentials" {
+  touch "$MOCK_TMPDIR/kvm"
+  export CODING_VM_TEST_MODE="1"
+  export CODING_VM_KVM_DEVICE="$MOCK_TMPDIR/kvm"
+  export CODING_VM_SKIP_APT="1"
+  export CODING_VM_USER="testuser"
+  unset CODING_VM_RDP_USER
+  unset CODING_VM_RDP_PASSWORD
+  export CODING_VM_RDP_ENV_FILE="$MOCK_TMPDIR/no-rdp.env"
+  : > "$MOCK_LOG"
+  run bash "$REPO_ROOT/coding-vm/provision.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"RDP"* ]]
+  ! grep -q "^grdctl " "$MOCK_LOG"
+}
+
+@test "coding-vm provision configures system RDP with credentials" {
+  touch "$MOCK_TMPDIR/kvm"
+  export CODING_VM_TEST_MODE="1"
+  export CODING_VM_KVM_DEVICE="$MOCK_TMPDIR/kvm"
+  export CODING_VM_SKIP_APT="1"
+  export CODING_VM_USER="testuser"
+  export CODING_VM_RDP_USER="rdpuser"
+  export CODING_VM_RDP_PASSWORD="fixture-pass"
+  export CODING_VM_RDP_CERT_DIR="$MOCK_TMPDIR/certs"
+  export CODING_VM_RDP_ENV_FILE="$MOCK_TMPDIR/no-rdp.env"
+  : > "$MOCK_LOG"
+  run bash "$REPO_ROOT/coding-vm/provision.sh"
+  [ "$status" -eq 0 ]
+  grep -q "^openssl " "$MOCK_LOG"
+  grep -q "^grdctl --system rdp set-tls-cert" "$MOCK_LOG"
+  grep -q "^grdctl --system rdp set-tls-key" "$MOCK_LOG"
+  grep -q "^grdctl --system rdp set-credentials rdpuser" "$MOCK_LOG"
+  grep -q "^grdctl --system rdp enable" "$MOCK_LOG"
+  grep -q "gnome-remote-desktop" "$MOCK_LOG"
+  [ -f "$MOCK_TMPDIR/certs/rdp-tls.crt" ]
+  [ -f "$MOCK_TMPDIR/certs/rdp-tls.key" ]
+}
+
+@test "coding-vm provision loads RDP password from env file" {
+  touch "$MOCK_TMPDIR/kvm"
+  export CODING_VM_TEST_MODE="1"
+  export CODING_VM_KVM_DEVICE="$MOCK_TMPDIR/kvm"
+  export CODING_VM_SKIP_APT="1"
+  export CODING_VM_USER="testuser"
+  export CODING_VM_RDP_USER="rdpuser"
+  unset CODING_VM_RDP_PASSWORD
+  export CODING_VM_RDP_CERT_DIR="$MOCK_TMPDIR/certs2"
+  export CODING_VM_RDP_ENV_FILE="$MOCK_TMPDIR/rdp.env"
+  printf "CODING_VM_RDP_PASSWORD='file-pass'\n" > "$MOCK_TMPDIR/rdp.env"
+  : > "$MOCK_LOG"
+  run bash "$REPO_ROOT/coding-vm/provision.sh"
+  [ "$status" -eq 0 ]
+  grep -q "^grdctl --system rdp set-credentials rdpuser" "$MOCK_LOG"
+}
+
+@test "coding-vm provision check-only validates system RDP when configured" {
+  touch "$MOCK_TMPDIR/kvm"
+  export CODING_VM_TEST_MODE="1"
+  export CODING_VM_KVM_DEVICE="$MOCK_TMPDIR/kvm"
+  export CODING_VM_RDP_USER="rdpuser"
+  export CODING_VM_RDP_PASSWORD="fixture-pass"
+  export CODING_VM_RDP_CERT_DIR="$MOCK_TMPDIR/certs3"
+  export CODING_VM_RDP_ENV_FILE="$MOCK_TMPDIR/no-rdp.env"
+  /bin/mkdir -p "$MOCK_TMPDIR/certs3"
+  touch "$MOCK_TMPDIR/certs3/rdp-tls.crt" "$MOCK_TMPDIR/certs3/rdp-tls.key"
+  export MOCK_SYSTEMCTL_FAIL="1"
+  run bash "$REPO_ROOT/coding-vm/provision.sh" --check-only
+  [ "$status" -ne 0 ]
+}
+
+# -------------------------------------------------------------------
+# coding-vm/install.sh RDP secret transport (file, never ssh argv)
+# -------------------------------------------------------------------
+
+@test "coding-vm install ships RDP password via file without leaking secret" {
+  _install_env
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  home-assistant       running    4096              32.00 12345'
+  export CODING_VM_RDP_USER="rdpuser"
+  export CODING_VM_RDP_PASSWORD="s3cret-xyz-123"
+  run bash "$REPO_ROOT/coding-vm/install.sh"
+  [ "$status" -eq 0 ]
+  grep -q "coding-vm-rdp.env" "$MOCK_LOG"
+  ! grep -q "s3cret-xyz-123" "$MOCK_LOG"
+  grep -q "CODING_VM_RDP_USER=rdpuser" "$MOCK_LOG"
+}
+
+@test "coding-vm install skips RDP file transport without password" {
+  _install_env
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  home-assistant       running    4096              32.00 12345'
+  unset CODING_VM_RDP_PASSWORD
+  run bash "$REPO_ROOT/coding-vm/install.sh"
+  [ "$status" -eq 0 ]
+  ! grep -q "coding-vm-rdp.env" "$MOCK_LOG"
+}
+
+# -------------------------------------------------------------------
+# coding-vm GUI option (CODING_VM_GUI=0 headless, default with GUI)
+# -------------------------------------------------------------------
+
+@test "coding-vm provision installs headless packages by default" {
+  touch "$MOCK_TMPDIR/kvm"
+  export CODING_VM_TEST_MODE="1"
+  export CODING_VM_KVM_DEVICE="$MOCK_TMPDIR/kvm"
+  export CODING_VM_SKIP_APT="0"
+  export CODING_VM_USER="testuser"
+  unset CODING_VM_GUI
+  unset CODING_VM_RDP_USER
+  unset CODING_VM_RDP_PASSWORD
+  export CODING_VM_RDP_ENV_FILE="$MOCK_TMPDIR/no-rdp.env"
+  : > "$MOCK_LOG"
+  run bash "$REPO_ROOT/coding-vm/provision.sh"
+  [ "$status" -eq 0 ]
+  grep -q "^apt-get install" "$MOCK_LOG"
+  grep -q "qemu-guest-agent" "$MOCK_LOG"
+  ! grep -q "ubuntu-desktop-minimal" "$MOCK_LOG"
+  ! grep -q "^apt-get install.*gnome-remote-desktop" "$MOCK_LOG"
+}
+
+@test "coding-vm provision installs desktop packages when GUI enabled" {
+  touch "$MOCK_TMPDIR/kvm"
+  export CODING_VM_TEST_MODE="1"
+  export CODING_VM_KVM_DEVICE="$MOCK_TMPDIR/kvm"
+  export CODING_VM_SKIP_APT="0"
+  export CODING_VM_USER="testuser"
+  export CODING_VM_GUI="1"
+  unset CODING_VM_RDP_USER
+  unset CODING_VM_RDP_PASSWORD
+  export CODING_VM_RDP_ENV_FILE="$MOCK_TMPDIR/no-rdp.env"
+  : > "$MOCK_LOG"
+  run bash "$REPO_ROOT/coding-vm/provision.sh"
+  [ "$status" -eq 0 ]
+  grep -q "ubuntu-desktop-minimal" "$MOCK_LOG"
+  grep -q "gnome-remote-desktop" "$MOCK_LOG"
+}
+
+@test "coding-vm provision installs headless packages without desktop when GUI disabled" {
+  touch "$MOCK_TMPDIR/kvm"
+  export CODING_VM_TEST_MODE="1"
+  export CODING_VM_KVM_DEVICE="$MOCK_TMPDIR/kvm"
+  export CODING_VM_SKIP_APT="0"
+  export CODING_VM_USER="testuser"
+  export CODING_VM_GUI="0"
+  unset CODING_VM_RDP_USER
+  unset CODING_VM_RDP_PASSWORD
+  export CODING_VM_RDP_ENV_FILE="$MOCK_TMPDIR/no-rdp.env"
+  : > "$MOCK_LOG"
+  run bash "$REPO_ROOT/coding-vm/provision.sh"
+  [ "$status" -eq 0 ]
+  grep -q "^apt-get install" "$MOCK_LOG"
+  grep -q "qemu-guest-agent" "$MOCK_LOG"
+  ! grep -q "ubuntu-desktop-minimal" "$MOCK_LOG"
+  ! grep -q "^apt-get install.*gnome-remote-desktop" "$MOCK_LOG"
+}
+
+@test "coding-vm provision disables GUI services when headless" {
+  touch "$MOCK_TMPDIR/kvm"
+  export CODING_VM_TEST_MODE="1"
+  export CODING_VM_KVM_DEVICE="$MOCK_TMPDIR/kvm"
+  export CODING_VM_SKIP_APT="1"
+  export CODING_VM_USER="testuser"
+  export CODING_VM_GUI="0"
+  unset CODING_VM_RDP_USER
+  unset CODING_VM_RDP_PASSWORD
+  export CODING_VM_RDP_ENV_FILE="$MOCK_TMPDIR/no-rdp.env"
+  : > "$MOCK_LOG"
+  run bash "$REPO_ROOT/coding-vm/provision.sh"
+  [ "$status" -eq 0 ]
+  grep -q "multi-user.target" "$MOCK_LOG"
+  grep -q "disable.*gdm" "$MOCK_LOG"
+}
+
+@test "coding-vm provision skips RDP setup when headless even with credentials" {
+  touch "$MOCK_TMPDIR/kvm"
+  export CODING_VM_TEST_MODE="1"
+  export CODING_VM_KVM_DEVICE="$MOCK_TMPDIR/kvm"
+  export CODING_VM_SKIP_APT="1"
+  export CODING_VM_USER="testuser"
+  export CODING_VM_GUI="0"
+  export CODING_VM_RDP_USER="rdpuser"
+  export CODING_VM_RDP_PASSWORD="fixture-pass"
+  export CODING_VM_RDP_CERT_DIR="$MOCK_TMPDIR/certs-headless"
+  export CODING_VM_RDP_ENV_FILE="$MOCK_TMPDIR/no-rdp.env"
+  : > "$MOCK_LOG"
+  run bash "$REPO_ROOT/coding-vm/provision.sh"
+  [ "$status" -eq 0 ]
+  ! grep -q "^grdctl " "$MOCK_LOG"
+}
+
+@test "coding-vm install passes GUI flag to guest" {
+  _install_env
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  home-assistant       running    4096              32.00 12345'
+  export CODING_VM_GUI="0"
+  run bash "$REPO_ROOT/coding-vm/install.sh"
+  [ "$status" -eq 0 ]
+  grep -q "CODING_VM_GUI=0" "$MOCK_LOG"
+}
+
+@test "coding-vm install defaults to headless guest flag" {
+  _install_env
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  home-assistant       running    4096              32.00 12345'
+  unset CODING_VM_GUI
+  run bash "$REPO_ROOT/coding-vm/install.sh"
+  [ "$status" -eq 0 ]
+  grep -q "CODING_VM_GUI=0" "$MOCK_LOG"
 }

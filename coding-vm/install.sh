@@ -19,6 +19,7 @@ IMAGE_URL="${CODING_VM_IMAGE_URL:-https://cloud-images.ubuntu.com/noble/current/
 IMAGE_DIR="${CODING_VM_IMAGE_DIR:-/var/lib/vz/template/iso}"
 WAIT_TIMEOUT="${CODING_VM_WAIT_TIMEOUT:-300}"
 MIN_IMAGE_BYTES="${CODING_VM_MIN_IMAGE_BYTES:-104857600}"
+GUI="${CODING_VM_GUI:-0}"
 
 log_step "Starting coding VM ($VM_NAME) installation..."
 
@@ -196,14 +197,38 @@ ssh_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$PROVI
 log_step "Pushing guest provision script..."
 scp "${ssh_opts[@]}" "$SCRIPT_DIR/provision.sh" "$CI_USER@$vm_ip:/tmp/coding-vm-provision.sh"
 
+# RDP password travels via scp'd env file, never in ssh argv (see mock secret-absence test).
+rdp_env_file=""
+if [ -n "${CODING_VM_RDP_PASSWORD:-}" ]; then
+    rdp_env_file=$(mktemp)
+    chmod 600 "$rdp_env_file"
+    printf 'CODING_VM_RDP_PASSWORD=%q\n' "$CODING_VM_RDP_PASSWORD" > "$rdp_env_file"
+    trap 'rm -f "$combined_keys" "$rdp_env_file"' EXIT
+    scp "${ssh_opts[@]}" "$rdp_env_file" "$CI_USER@$vm_ip:/tmp/coding-vm-rdp.env"
+fi
+
+guest_env=("CODING_VM_USER=$CI_USER" "CODING_VM_GUI=$GUI")
+if [ -n "${CODING_VM_RDP_USER:-}" ]; then
+    guest_env+=("CODING_VM_RDP_USER=${CODING_VM_RDP_USER}")
+fi
+if [ -n "${CODING_VM_RDP_CERT_DIR:-}" ]; then
+    guest_env+=("CODING_VM_RDP_CERT_DIR=${CODING_VM_RDP_CERT_DIR}")
+fi
+
 log_step "Running guest provisioning..."
-ssh "${ssh_opts[@]}" "$CI_USER@$vm_ip" sudo env "CODING_VM_USER=$CI_USER" bash /tmp/coding-vm-provision.sh
+ssh "${ssh_opts[@]}" "$CI_USER@$vm_ip" sudo env "${guest_env[@]}" bash /tmp/coding-vm-provision.sh
 
 log_step "Validating guest (KVM, ssh)..."
-ssh "${ssh_opts[@]}" "$CI_USER@$vm_ip" sudo bash /tmp/coding-vm-provision.sh --check-only
+ssh "${ssh_opts[@]}" "$CI_USER@$vm_ip" sudo env "${guest_env[@]}" bash /tmp/coding-vm-provision.sh --check-only
 
 echo ""
 log_success "Coding VM '$VM_NAME' (ID: $vmid, IP: $vm_ip) is ready."
 log_info "SSH: ssh $CI_USER@$vm_ip (VS Code Remote-SSH)"
-log_info "RDP: $vm_ip:3389 (LAN only; if refused, enable in Settings > System > Remote Desktop on first login)"
+if [ "$GUI" = "0" ]; then
+    log_info "GUI: disabled (headless, CODING_VM_GUI=0 — no desktop, no RDP)"
+elif [ -n "${CODING_VM_RDP_USER:-}" ]; then
+    log_info "RDP: $vm_ip:3389 (system grdctl, user ${CODING_VM_RDP_USER})"
+else
+    log_info "RDP: not configured (set CODING_VM_RDP_USER/CODING_VM_RDP_PASSWORD and re-run provision for headless RDP on :3389)"
+fi
 log_info "SSH/RDP are plain TCP; no Caddy entry needed."
