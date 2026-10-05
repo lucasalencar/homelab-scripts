@@ -47,13 +47,13 @@ if $has_P; then
 
   # nextcloud datadirectory pattern: =>\s*'\K[^']+  and  =>\s*'\K
   if [[ "$pattern" == *"=>\\s*'"* ]] || [[ "$pattern" == *"=>"* ]] || [[ "$pattern" == *"datadirectory"* ]]; then
-    echo "$input" | sed -E "s/.*=>[[:space:]]*'([^']+).*/\1/" | head -1
+    echo "$input" | sed -E -n "s/.*=>[[:space:]]*'([^']+).*/\1/p" | head -1
     exit 0
   fi
 
   # ipconfig pattern: ipconfig\d:\s*ip=\K[^/]+
   if [[ "$pattern" == *"ipconfig"* ]]; then
-    echo "$input" | sed -E 's/.*ip=([^\/[:space:]]+).*/\1/' | head -1
+    echo "$input" | sed -E -n 's/.*ip=([^\/[:space:]]+).*/\1/p' | head -1
     # Only output if it looks like IP
     exit 0
   fi
@@ -69,9 +69,22 @@ if $has_P; then
     exit 0
   fi
 
+  # qm config name pattern: (?:hostname|name):\s*\K\S+ — must precede the
+  # bare hostname branch below (the alternation contains "hostname" too)
+  if [[ "$pattern" == *"(?:hostname|name)"* ]]; then
+    echo "$input" | sed -E -n 's/^(hostname|name):[[:space:]]*([^[:space:]]+).*/\2/p' | head -1
+    exit 0
+  fi
+
+  # ip addr pattern: inet \K[\d.]+
+  if [[ "$pattern" == *"inet "* ]]; then
+    echo "$input" | grep -oE 'inet [0-9.]+' | awk '{print $2}' | head -1
+    exit 0
+  fi
+
   # hostname pattern
   if [[ "$pattern" == *"hostname"* ]]; then
-    echo "$input" | sed -E 's/.*hostname:[[:space:]]*([^[:space:]]+).*/\1/' | head -1
+    echo "$input" | sed -E -n 's/.*hostname:[[:space:]]*([^[:space:]]+).*/\1/p' | head -1
     exit 0
   fi
 
