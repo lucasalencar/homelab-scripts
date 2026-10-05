@@ -1,5 +1,7 @@
 # Learnings from previous sessions
 
+- **GNOME Remote Desktop headless setup needs `grdctl --system`, never user mode:** user-mode `grdctl rdp set-credentials` stores secrets in the GNOME keyring, which is locked over SSH with no graphical session (fails with `BIO_new failed for certificate` / missing `/org/freedesktop/secrets`). System mode (`sudo grdctl --system rdp set-tls-cert/key`, `set-credentials`, `enable` + `systemctl enable --now gnome-remote-desktop.service`) falls back to a GKeyFile and listens on 3389 with no login required. Generate the self-signed cert with `openssl req -x509` under an env-overridable dir, and ship the password to the guest via an scp'd 0600 env file that the guest script sources — never in `ssh ... env VAR=...` argv, which test mocks log verbatim.
+
 - **`trust-nextcloud.sh` — always also search for "nextcloudpi" container name:** The script only looked for "nextcloud" via `get_container_id_by_name`, but NextcloudPi Community Script creates a container named "nextcloudpi". Always fallback to "nextcloudpi" if "nextcloud" is not found.
 
 - **Caddy reverse proxy + NextcloudPi (HTTPS redirect loop fix):**
