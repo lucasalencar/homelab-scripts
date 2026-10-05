@@ -198,16 +198,6 @@ pct push "$CADDY_ID" "$LOCAL_CADDYFILE" /etc/caddy/Caddyfile
 log_step "Reloading Caddy..."
 pct exec "$CADDY_ID" -- systemctl reload caddy
 
-# --- If any Nextcloud guest is configured, run trust-nextcloud.sh ---
-for i in $(seq 0 $((TOTAL - 1))); do
-    name="${GUEST_NAMES[$i]}"
-    if [[ "$name" == nextcloud* ]]; then
-        echo ""
-        log_step "Configuring Nextcloud ($name) to trust Caddy..."
-        "$SCRIPT_DIR/trust-nextcloud.sh" --container "${GUEST_IDS[$i]}" --domain "$DOMAIN"
-    fi
-done
-
 echo ""
 log_success "Caddy reloaded with latest configuration."
 echo ""
