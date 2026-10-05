@@ -8,8 +8,8 @@ source "$SCRIPT_DIR/../common/functions.sh" || { echo "Error: failed to load com
 
 require_root
 
-LOCAL_CADDYFILE="$SCRIPT_DIR/Caddyfile.local"
-STATE_FILE="$SCRIPT_DIR/state.json"
+LOCAL_CADDYFILE="${CADDY_LOCAL_CADDYFILE:-$SCRIPT_DIR/Caddyfile.local}"
+STATE_FILE="${CADDY_STATE_FILE:-$SCRIPT_DIR/state.json}"
 CADDY_CONTAINER_NAME="caddy"
 DOMAIN="marx.home"
 CORE_SCRIPT="$SCRIPT_DIR/generate_caddyfile_core.py"
