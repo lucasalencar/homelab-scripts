@@ -331,3 +331,164 @@ EOF
     rm -f "$REPO_ROOT/caddy/state.json"
   fi
 }
+@test "caddy generate shows per-guest probing progress during collection" {
+  if [ -f "$REPO_ROOT/caddy/Caddyfile.local" ]; then
+    cp "$REPO_ROOT/caddy/Caddyfile.local" "$MOCK_TMPDIR/Caddyfile.local.orig"
+  fi
+  rm -f "$REPO_ROOT/caddy/Caddyfile.local"
+  if [ -f "$REPO_ROOT/caddy/state.json" ]; then
+    cp "$REPO_ROOT/caddy/state.json" "$MOCK_TMPDIR/state.json.orig"
+  fi
+  rm -f "$REPO_ROOT/caddy/state.json"
+
+
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n100        running                 caddy\n105        running                 starr'
+  export MOCK_PCT_CONFIG_100="hostname: caddy"
+  export MOCK_PCT_CONFIG_105="hostname: starr"
+  export MOCK_PCT_STATUS="status: running"
+  export MOCK_QM_LIST="VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID"
+  export MOCK_PCT_EXEC_HOSTNAME_I="10.0.0.5"
+  export MOCK_PCT_EXEC_SS_OUTPUT=$'State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess\nLISTEN 0     128          0.0.0.0:8096      0.0.0.0:*'
+
+  run bash -c "printf '\n\n' | bash \"$REPO_ROOT/caddy/generate-caddyfile.sh\" 2>&1"
+  [ "$status" -eq 0 ]
+  # Each probed guest is announced before its probes run, so a hang
+  # points at the last announced guest instead of silent output
+  [[ "$output" == *"Probing CT 105 (starr)"* ]]
+  # The caddy container itself is excluded, never probed
+  [[ "$output" != *"Probing CT 100"* ]]
+
+  if [ -f "$MOCK_TMPDIR/Caddyfile.local.orig" ]; then
+    cp "$MOCK_TMPDIR/Caddyfile.local.orig" "$REPO_ROOT/caddy/Caddyfile.local"
+  else
+    rm -f "$REPO_ROOT/caddy/Caddyfile.local"
+  fi
+  if [ -f "$MOCK_TMPDIR/state.json.orig" ]; then
+    cp "$MOCK_TMPDIR/state.json.orig" "$REPO_ROOT/caddy/state.json"
+  else
+    rm -f "$REPO_ROOT/caddy/state.json"
+  fi
+}
+
+@test "caddy generate warns and skips VM whose guest agent does not respond" {
+  if [ -f "$REPO_ROOT/caddy/Caddyfile.local" ]; then
+    cp "$REPO_ROOT/caddy/Caddyfile.local" "$MOCK_TMPDIR/Caddyfile.local.orig"
+  fi
+  rm -f "$REPO_ROOT/caddy/Caddyfile.local"
+  if [ -f "$REPO_ROOT/caddy/state.json" ]; then
+    cp "$REPO_ROOT/caddy/state.json" "$MOCK_TMPDIR/state.json.orig"
+  fi
+  rm -f "$REPO_ROOT/caddy/state.json"
+
+
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n100        running                 caddy'
+  export MOCK_PCT_CONFIG_100="hostname: caddy"
+  export MOCK_PCT_STATUS="status: running"
+  export MOCK_PCT_EXEC_HOSTNAME_I="10.0.0.5"
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  deadvm               running    2048              32.00 999'
+  export MOCK_QM_CONFIG_200="name: deadvm"
+  export MOCK_QM_GUEST_FAIL=1
+
+  run bash "$REPO_ROOT/caddy/generate-caddyfile.sh" </dev/null 2>&1
+  # A dead agent must not abort the run, and the skip must be visible
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Probing VM 200 (deadvm)"* ]]
+  [[ "$output" == *"Skipping VM 200 (deadvm)"* ]]
+  [ ! -f "$REPO_ROOT/caddy/Caddyfile.local" ] || ! /usr/bin/grep -q "deadvm.marx.home" "$REPO_ROOT/caddy/Caddyfile.local"
+
+  if [ -f "$MOCK_TMPDIR/Caddyfile.local.orig" ]; then
+    cp "$MOCK_TMPDIR/Caddyfile.local.orig" "$REPO_ROOT/caddy/Caddyfile.local"
+  else
+    rm -f "$REPO_ROOT/caddy/Caddyfile.local"
+  fi
+  if [ -f "$MOCK_TMPDIR/state.json.orig" ]; then
+    cp "$MOCK_TMPDIR/state.json.orig" "$REPO_ROOT/caddy/state.json"
+  else
+    rm -f "$REPO_ROOT/caddy/state.json"
+  fi
+}
+
+@test "caddy generate warns when port probe fails but still configures the guest" {
+  if [ -f "$REPO_ROOT/caddy/Caddyfile.local" ]; then
+    cp "$REPO_ROOT/caddy/Caddyfile.local" "$MOCK_TMPDIR/Caddyfile.local.orig"
+  fi
+  rm -f "$REPO_ROOT/caddy/Caddyfile.local"
+  if [ -f "$REPO_ROOT/caddy/state.json" ]; then
+    cp "$REPO_ROOT/caddy/state.json" "$MOCK_TMPDIR/state.json.orig"
+  fi
+  rm -f "$REPO_ROOT/caddy/state.json"
+
+
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n100        running                 caddy'
+  export MOCK_PCT_CONFIG_100="hostname: caddy"
+  export MOCK_PCT_STATUS="status: running"
+  export MOCK_PCT_EXEC_HOSTNAME_I="10.0.0.5"
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  test-vm              running    2048              32.00 999'
+  export MOCK_QM_GUEST_FAIL=1
+
+  # Default qm config mock carries ipconfig0 ip=10.0.0.10/24, so the VM is
+  # collected via the ipconfig fallback even with a dead agent; the port
+  # scan then fails and must warn instead of silently yielding no ports
+  run bash -c "printf '\n\n' | bash \"$REPO_ROOT/caddy/generate-caddyfile.sh\" 2>&1"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Probe failed for VM 200 (test-vm) port scan"* ]]
+  /usr/bin/grep -q "test-vm.marx.home" "$REPO_ROOT/caddy/Caddyfile.local"
+
+  if [ -f "$MOCK_TMPDIR/Caddyfile.local.orig" ]; then
+    cp "$MOCK_TMPDIR/Caddyfile.local.orig" "$REPO_ROOT/caddy/Caddyfile.local"
+  else
+    rm -f "$REPO_ROOT/caddy/Caddyfile.local"
+  fi
+  if [ -f "$MOCK_TMPDIR/state.json.orig" ]; then
+    cp "$MOCK_TMPDIR/state.json.orig" "$REPO_ROOT/caddy/state.json"
+  else
+    rm -f "$REPO_ROOT/caddy/state.json"
+  fi
+}
+
+@test "caddy generate runs guest probes under CADDY_GUEST_TIMEOUT" {
+  if [ -f "$REPO_ROOT/caddy/Caddyfile.local" ]; then
+    cp "$REPO_ROOT/caddy/Caddyfile.local" "$MOCK_TMPDIR/Caddyfile.local.orig"
+  fi
+  rm -f "$REPO_ROOT/caddy/Caddyfile.local"
+  if [ -f "$REPO_ROOT/caddy/state.json" ]; then
+    cp "$REPO_ROOT/caddy/state.json" "$MOCK_TMPDIR/state.json.orig"
+  fi
+  rm -f "$REPO_ROOT/caddy/state.json"
+
+
+  # Spy timeout: records the requested duration, then delegates to the real one
+  mkdir -p "$MOCK_TMPDIR/fakebin"
+  export REAL_TIMEOUT="$(command -v timeout)"
+  cat > "$MOCK_TMPDIR/fakebin/timeout" <<'EOF'
+#!/usr/bin/env bash
+echo "TIMEOUT-DUR:$1" >> "$MOCK_LOG"
+shift
+exec "$REAL_TIMEOUT" "$@"
+EOF
+  /bin/chmod +x "$MOCK_TMPDIR/fakebin/timeout"
+  export PATH="$MOCK_TMPDIR/fakebin:$PATH"
+
+  export CADDY_GUEST_TIMEOUT=7
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n100        running                 caddy'
+  export MOCK_PCT_CONFIG_100="hostname: caddy"
+  export MOCK_PCT_STATUS="status: running"
+  export MOCK_PCT_EXEC_HOSTNAME_I="10.0.0.5"
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  test-vm              running    2048              32.00 999'
+  export MOCK_QM_GUEST_HOSTNAME_I="10.0.0.10"
+
+  run bash -c "printf '\n\n' | bash \"$REPO_ROOT/caddy/generate-caddyfile.sh\" 2>&1"
+  [ "$status" -eq 0 ]
+  /usr/bin/grep -q "TIMEOUT-DUR:7" "$MOCK_LOG"
+
+  if [ -f "$MOCK_TMPDIR/Caddyfile.local.orig" ]; then
+    cp "$MOCK_TMPDIR/Caddyfile.local.orig" "$REPO_ROOT/caddy/Caddyfile.local"
+  else
+    rm -f "$REPO_ROOT/caddy/Caddyfile.local"
+  fi
+  if [ -f "$MOCK_TMPDIR/state.json.orig" ]; then
+    cp "$MOCK_TMPDIR/state.json.orig" "$REPO_ROOT/caddy/state.json"
+  else
+    rm -f "$REPO_ROOT/caddy/state.json"
+  fi
+}

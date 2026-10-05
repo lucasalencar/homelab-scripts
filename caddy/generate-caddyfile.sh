@@ -14,6 +14,35 @@ CADDY_CONTAINER_NAME="caddy"
 DOMAIN="marx.home"
 CORE_SCRIPT="$SCRIPT_DIR/generate_caddyfile_core.py"
 
+# Seconds allowed per guest-agent probe; a dead agent fails fast instead of
+# hanging the run silently. Override with CADDY_GUEST_TIMEOUT for slow hosts.
+GUEST_PROBE_TIMEOUT="${CADDY_GUEST_TIMEOUT:-30}"
+if ! command -v timeout >/dev/null 2>&1; then
+    log_warning "  'timeout' not found — guest probes run without a time limit"
+    GUEST_PROBE_TIMEOUT=""
+fi
+
+# Runs a guest probe with a timeout, printing probe stdout on success.
+# Failures get a visible warning (label + exit code + first error line)
+# instead of vanishing into 2>/dev/null, so a dead guest agent shows up in
+# the log. Callers add `|| true` when a failed probe is an expected miss.
+run_probe() {
+    local label="$1"
+    shift
+    local output status=0
+    if [ -n "$GUEST_PROBE_TIMEOUT" ]; then
+        output=$(timeout "$GUEST_PROBE_TIMEOUT" "$@" 2>&1) || status=$?
+    else
+        output=$("$@" 2>&1) || status=$?
+    fi
+    if [ "$status" -ne 0 ]; then
+        # To stderr: callers capture stdout, and the warning must stay visible
+        log_warning "  Probe failed for $label (exit $status): $(printf '%s' "$output" | head -1)" >&2
+        return "$status"
+    fi
+    printf '%s\n' "$output"
+}
+
 log_step "Caddyfile Generator for *.$DOMAIN"
 echo ""
 
@@ -41,12 +70,27 @@ while IFS= read -r cid; do
     cid="${cid// /}"
     [ -z "$cid" ] && continue
 
-    name=$(pct config "$cid" 2>/dev/null | grep -oP 'hostname:\s*\K\S+' || true)
-    [ -z "$name" ] && continue
+    if ! cfg=$(pct config "$cid" 2>&1); then
+        log_warning "  Skipping CT $cid: 'pct config' failed: $(printf '%s' "$cfg" | head -1)"
+        continue
+    fi
+    name=$(printf '%s' "$cfg" | grep -oP 'hostname:\s*\K\S+' || true)
+    if [ -z "$name" ]; then
+        log_warning "  Skipping CT $cid: could not determine hostname"
+        continue
+    fi
     [ "$name" = "$CADDY_CONTAINER_NAME" ] && continue
 
-    ip=$(get_container_ip "$cid")
-    [ -z "$ip" ] && continue
+    log_info "  Probing CT $cid ($name)..."
+
+    if ! ip=$(get_container_ip "$cid"); then
+        log_warning "  Skipping CT $cid ($name): no IP found"
+        continue
+    fi
+    if [ -z "$ip" ]; then
+        log_warning "  Skipping CT $cid ($name): no IP found"
+        continue
+    fi
 
     GUEST_IDS+=("$cid")
     GUEST_NAMES+=("$name")
@@ -68,16 +112,21 @@ while IFS= read -r vmid; do
         continue
     fi
 
-    json=$(qm guest exec "$vmid" -- hostname -I 2>/dev/null)
+    log_info "  Probing VM $vmid ($name)..."
+
+    json=$(run_probe "VM $vmid ($name) 'hostname -I'" qm guest exec "$vmid" -- hostname -I || true)
     ip=$(echo "$json" | jq -r '.["out-data"] // .["out"] // empty' 2>/dev/null | awk '{print $1}' || true)
     if [ -z "$ip" ]; then
-        json=$(qm guest exec "$vmid" -- ip -4 addr show 2>/dev/null)
+        json=$(run_probe "VM $vmid ($name) 'ip addr'" qm guest exec "$vmid" -- ip -4 addr show || true)
         ip=$(echo "$json" | jq -r '.["out-data"] // .["out"] // empty' 2>/dev/null | grep -oP 'inet \K[\d.]+' | grep -v '^127\.' | head -1 || true)
     fi
     if [ -z "$ip" ]; then
         ip=$(qm config "$vmid" 2>/dev/null | grep -oP 'ipconfig\d:\s*ip=\K[^/]+' | head -1 || true)
     fi
-    [ -z "$ip" ] && continue
+    if [ -z "$ip" ]; then
+        log_warning "  Skipping VM $vmid ($name): no IP found (is the guest agent running?)"
+        continue
+    fi
 
     GUEST_IDS+=("$vmid")
     GUEST_NAMES+=("$name")
@@ -107,14 +156,20 @@ parse_ss_ports() {
 detect_ports() {
     local guest_type="$1"
     local guest_id="$2"
+    local guest_name="${3:-$guest_id}"
     local output
     if [ "$guest_type" = "ct" ]; then
         if pct status "$guest_id" 2>/dev/null | grep -q "running"; then
-            pct exec "$guest_id" -- ss -tlnp </dev/null 2>/dev/null | parse_ss_ports
+            if ! output=$(run_probe "CT $guest_id ($guest_name) port scan" pct exec "$guest_id" -- ss -tlnp </dev/null); then
+                return 1
+            fi
+            printf '%s' "$output" | parse_ss_ports
         fi
     else
         if qm status "$guest_id" 2>/dev/null | grep -q "running"; then
-            output=$(qm guest exec "$guest_id" -- ss -tlnp </dev/null 2>/dev/null)
+            if ! output=$(run_probe "VM $guest_id ($guest_name) port scan" qm guest exec "$guest_id" -- ss -tlnp </dev/null); then
+                return 1
+            fi
             echo "$output" | jq -r '.["out-data"] // .["out"] // empty' 2>/dev/null | parse_ss_ports
         fi
     fi
@@ -156,9 +211,11 @@ for i in $(seq 0 $((TOTAL - 1))); do
     guest_type="${GUEST_TYPES[$i]}"
     ip="${GUEST_IPS[$name]}"
 
-    listening_ports=$(detect_ports "$guest_type" "$gid")
+    listening_ports=$(detect_ports "$guest_type" "$gid" "$name" || true)
     if [ -n "$listening_ports" ]; then
         log_info "  Detected ports for $name: $(echo "$listening_ports" | tr '\n' ' ')"
+    else
+        log_info "  No listening ports detected for $name"
     fi
     ports_json=$(printf '%s' "$listening_ports" | jq -R -s '[split("\n")[] | select(test("^[0-9]+$")) | tonumber]' || true)
     [ -z "$ports_json" ] && ports_json="[]"
