@@ -205,6 +205,9 @@ TMP_CADDYFILE=$(mktemp)
 trap 'rm -f "$GUESTS_JSON" "$TMP_CADDYFILE"' EXIT
 echo '[]' > "$GUESTS_JSON"
 
+# One summary line per guest, printed right before the core prompts so the
+# operator need not scroll up to see which ports each guest exposes
+PORT_SUMMARY=()
 for i in $(seq 0 $((TOTAL - 1))); do
     name="${GUEST_NAMES[$i]}"
     gid="${GUEST_IDS[$i]}"
@@ -214,8 +217,10 @@ for i in $(seq 0 $((TOTAL - 1))); do
     listening_ports=$(detect_ports "$guest_type" "$gid" "$name" || true)
     if [ -n "$listening_ports" ]; then
         log_info "  Detected ports for $name: $(echo "$listening_ports" | tr '\n' ' ')"
+        PORT_SUMMARY+=("$name ($ip): $(printf '%s' "$listening_ports" | tr '\n' ' ')")
     else
         log_info "  No listening ports detected for $name"
+        PORT_SUMMARY+=("$name ($ip): no ports detected")
     fi
     ports_json=$(printf '%s' "$listening_ports" | jq -R -s '[split("\n")[] | select(test("^[0-9]+$")) | tonumber]' || true)
     [ -z "$ports_json" ] && ports_json="[]"
@@ -223,6 +228,13 @@ for i in $(seq 0 $((TOTAL - 1))); do
         '. + [{name: $name, gid: $gid, gtype: $type, ip: $ip, ports: $ports}]' "$GUESTS_JSON")
     echo "$guests_updated" > "$GUESTS_JSON"
 done
+
+echo ""
+log_step "Detected services (use these ports when answering below)"
+for summary_line in "${PORT_SUMMARY[@]}"; do
+    log_info "  $summary_line"
+done
+echo ""
 
 # --- Merge guests into state, then render the Caddyfile via the core ---
 REAL_PYTHON3=$(resolve_real_python3 || true)

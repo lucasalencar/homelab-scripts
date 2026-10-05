@@ -233,6 +233,11 @@ EOF
   /usr/bin/grep -q "reverse_proxy 10.0.0.5:6767" "$TEST_CADDYFILE"
 
 }
+
+# -------------------------------------------------------------------
+# caddy/generate-caddyfile.sh — step-by-step visibility
+# -------------------------------------------------------------------
+
 @test "caddy generate shows per-guest probing progress during collection" {
 
 
@@ -321,4 +326,19 @@ EOF
   [ "$status" -eq 0 ]
   /usr/bin/grep -q "TIMEOUT-DUR:7" "$MOCK_LOG"
 
+}
+@test "caddy generate prints detected ports per guest before prompting" {
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n100        running                 caddy\n105        running                 starr'
+  export MOCK_PCT_CONFIG_100="hostname: caddy"
+  export MOCK_PCT_CONFIG_105="hostname: starr"
+  export MOCK_PCT_STATUS="status: running"
+  export MOCK_QM_LIST="VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID"
+  export MOCK_PCT_EXEC_HOSTNAME_I="10.0.0.5"
+  export MOCK_PCT_EXEC_SS_OUTPUT=$'State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess\nLISTEN 0     128          0.0.0.0:6767      0.0.0.0:*\nLISTEN 0     128          0.0.0.0:7878      0.0.0.0:*'
+
+  # Skip every port, fall back to single-service: prompts still appear, and
+  # the port summary must be visible right next to them (no scroll-up needed)
+  run bash -c "printf 'y\n\n\n\n\n' | bash \"$REPO_ROOT/caddy/generate-caddyfile.sh\" 2>&1"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"starr (10.0.0.5): 6767 7878"* ]]
 }

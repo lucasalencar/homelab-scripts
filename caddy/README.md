@@ -25,3 +25,11 @@ trust-nextcloud.sh      (only for Nextcloud)
 trust-nextcloud-restore.sh (undo trust-nextcloud.sh changes)
 update.sh               (run any time to upgrade)
 ```
+
+## Environment overrides (`generate-caddyfile.sh`)
+
+| Variable | Default | Description |
+|---|---|---|
+| `CADDY_LOCAL_CADDYFILE` | `caddy/Caddyfile.local` | Where the rendered Caddyfile is written. |
+| `CADDY_STATE_FILE` | `caddy/state.json` | Generator-owned state (see that file). |
+| `CADDY_GUEST_TIMEOUT` | `30` | Seconds allowed per guest-agent probe before failing visibly. |
