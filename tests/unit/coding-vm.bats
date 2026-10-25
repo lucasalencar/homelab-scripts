@@ -529,3 +529,82 @@ EOF
   [ "$status" -eq 0 ]
   grep -q "CODING_VM_GUI=0" "$MOCK_LOG"
 }
+
+# -------------------------------------------------------------------
+# coding-vm/enable-gui.sh and coding-vm/disable-gui.sh (host-side,
+# re-provision an existing VM to toggle the desktop + RDP stack)
+# -------------------------------------------------------------------
+
+_gui_env() {
+  _install_env
+  unset CODING_VM_RDP_USER
+  unset CODING_VM_RDP_PASSWORD
+  unset MOCK_QM_CONFIG_201
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n201  code                   running    12288             80.00 12345'
+  export MOCK_QM_STATUS="status: running"
+  touch "$CODING_VM_PROVISION_KEY_FILE"
+}
+
+@test "coding-vm enable-gui fails without RDP credentials" {
+  _gui_env
+  run bash "$REPO_ROOT/coding-vm/enable-gui.sh"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"RDP"* ]]
+  ! grep -q "^scp " "$MOCK_LOG"
+}
+
+@test "coding-vm enable-gui fails when VM is missing" {
+  _gui_env
+  export CODING_VM_RDP_USER="rdpuser"
+  export CODING_VM_RDP_PASSWORD="s3cret-xyz-123"
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  home-assistant       running    4096              32.00 12345'
+  run bash "$REPO_ROOT/coding-vm/enable-gui.sh"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"code"* ]]
+  ! grep -q "^scp " "$MOCK_LOG"
+}
+
+@test "coding-vm enable-gui provisions desktop with GUI=1 without leaking secret" {
+  _gui_env
+  export CODING_VM_RDP_USER="rdpuser"
+  export CODING_VM_RDP_PASSWORD="s3cret-xyz-123"
+  export MOCK_QM_CONFIG_201=$'ciuser: coder\ncores: 8\nmemory: 12288'
+  run bash "$REPO_ROOT/coding-vm/enable-gui.sh"
+  [ "$status" -eq 0 ]
+  grep -q "^scp .*provision.sh" "$MOCK_LOG"
+  grep -q "coding-vm-rdp.env" "$MOCK_LOG"
+  grep -q "CODING_VM_GUI=1" "$MOCK_LOG"
+  grep -q "coder@10.0.0.10" "$MOCK_LOG"
+  grep -q -- "--check-only" "$MOCK_LOG"
+  ! grep -q "s3cret-xyz-123" "$MOCK_LOG"
+}
+
+@test "coding-vm enable-gui starts a stopped VM before provisioning" {
+  _gui_env
+  export CODING_VM_RDP_USER="rdpuser"
+  export CODING_VM_RDP_PASSWORD="s3cret-xyz-123"
+  export MOCK_QM_STATUS="status: stopped"
+  run bash "$REPO_ROOT/coding-vm/enable-gui.sh"
+  [ "$status" -eq 0 ]
+  grep -q "^qm start" "$MOCK_LOG"
+  grep -q "CODING_VM_GUI=1" "$MOCK_LOG"
+}
+
+@test "coding-vm disable-gui provisions headless with GUI=0" {
+  _gui_env
+  run bash "$REPO_ROOT/coding-vm/disable-gui.sh"
+  [ "$status" -eq 0 ]
+  grep -q "^scp .*provision.sh" "$MOCK_LOG"
+  grep -q "CODING_VM_GUI=0" "$MOCK_LOG"
+  ! grep -q "coding-vm-rdp.env" "$MOCK_LOG"
+  grep -q -- "--check-only" "$MOCK_LOG"
+}
+
+@test "coding-vm disable-gui fails when VM is missing" {
+  _gui_env
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  home-assistant       running    4096              32.00 12345'
+  run bash "$REPO_ROOT/coding-vm/disable-gui.sh"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"code"* ]]
+  ! grep -q "^scp " "$MOCK_LOG"
+}

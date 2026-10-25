@@ -10,6 +10,8 @@ after first login.
 |---|---|---|
 | `install.sh` | Proxmox host, as root | Creates the `code` VM, provisions the guest and validates KVM. |
 | `provision.sh` | Inside the guest (called by `install.sh`) | System packages, KVM group, SSH/RDP. `--check-only` runs validations. |
+| `enable-gui.sh` | Proxmox host, as root | Re-provisions an existing VM with desktop + RDP (no reinstall). |
+| `disable-gui.sh` | Proxmox host, as root | Re-provisions an existing VM back to headless (SSH only). |
 | `ssh-setup.sh [user@]<vm_ip>` | Your Mac / client, as your user | SSH key, key copy to the VM, `Host code` config entry. |
 | `update.sh` | Proxmox host, as root | Upgrades guest packages via the guest agent. |
 
@@ -80,6 +82,25 @@ Android SDK): the system base (KVM, SSH) is already in place.
 ```bash
 ./coding-vm/update.sh
 ```
+
+### Toggling the desktop on an existing VM (on Proxmox, as root)
+
+`install.sh` skips VMs that already exist, so use these to switch modes
+without reinstalling. Both start the VM if it is stopped and validate
+the guest at the end.
+
+```bash
+# Headless -> desktop + RDP (installs ~1GB of packages)
+CODING_VM_RDP_USER=rdpuser CODING_VM_RDP_PASSWORD='...' ./coding-vm/enable-gui.sh
+# Connect with any RDP client at <vm-ip>:3389
+
+# Desktop -> headless (SSH only, desktop services disabled)
+./coding-vm/disable-gui.sh
+```
+
+Overrides: `CODING_VM_NAME`, `CODING_VM_PROVISION_KEY_FILE`,
+`CODING_VM_WAIT_TIMEOUT` (both scripts), plus `CODING_VM_RDP_USER`,
+`CODING_VM_RDP_PASSWORD`, `CODING_VM_RDP_CERT_DIR` (`enable-gui.sh`).
 
 ## Customization
 
