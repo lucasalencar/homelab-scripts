@@ -69,3 +69,30 @@ teardown() {
   # Should succeed or skip gracefully when mocked
   [ "$status" -eq 0 ] || [[ "$output" == *"jellyfin"* ]]
 }
+
+@test "jellyfin update does not pin ffmpeg version" {
+  # ffmpeg7 -> ffmpeg8 transition: script must not hardcode either,
+  # let apt resolve the dependency from the jellyfin metapackages.
+  run /bin/grep -E "jellyfin-ffmpeg[0-9]" "$REPO_ROOT/jellyfin/update.sh"
+  [ "$status" -ne 0 ]
+}
+
+@test "jellyfin update installs jellyfin without --only-upgrade" {
+  # --only-upgrade ignores not-yet-installed packages (e.g. ffmpeg8),
+  # so the jellyfin install must be plain to allow new deps.
+  /bin/grep -q "apt install.*jellyfin" "$REPO_ROOT/jellyfin/update.sh"
+  run /bin/grep "apt install.*--only-upgrade.*jellyfin" "$REPO_ROOT/jellyfin/update.sh"
+  [ "$status" -ne 0 ]
+}
+
+@test "jellyfin update runs apt install before apt upgrade" {
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n101        running                 jellyfin'
+  export MOCK_PCT_CONFIG="hostname: jellyfin"
+  run bash "$REPO_ROOT/jellyfin/update.sh" 2>&1
+  [ "$status" -eq 0 ]
+  install_line=$(/bin/grep -n "apt install" "$MOCK_LOG" | /usr/bin/head -1 | /usr/bin/cut -d: -f1)
+  upgrade_line=$(/bin/grep -n "apt upgrade" "$MOCK_LOG" | /usr/bin/head -1 | /usr/bin/cut -d: -f1)
+  [ -n "$install_line" ]
+  [ -n "$upgrade_line" ]
+  [ "$install_line" -lt "$upgrade_line" ]
+}
