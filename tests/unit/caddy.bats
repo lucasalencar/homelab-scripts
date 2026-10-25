@@ -248,3 +248,32 @@ EOF
     rm -f "$REPO_ROOT/caddy/Caddyfile.local"
   fi
 }
+
+# -------------------------------------------------------------------
+# caddy/push-caddyfile.sh — standalone push + reload
+# -------------------------------------------------------------------
+
+@test "caddy push-caddyfile pushes the file and reloads caddy" {
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n100        running                 caddy'
+  export MOCK_PCT_CONFIG_100="hostname: caddy"
+  printf '# bats-test\nfoo.marx.home {\n    reverse_proxy 10.0.0.5:1234\n}\n' > "$MOCK_TMPDIR/Caddyfile.local"
+  run bash "$REPO_ROOT/caddy/push-caddyfile.sh" --file "$MOCK_TMPDIR/Caddyfile.local" 2>&1
+  [ "$status" -eq 0 ]
+  /usr/bin/grep -q "pct push 100" "$MOCK_LOG"
+  /usr/bin/grep -q "pct exec 100" "$MOCK_LOG"
+  /usr/bin/grep -q "reload caddy" "$MOCK_LOG"
+}
+
+@test "caddy push-caddyfile fails when the file is missing" {
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n100        running                 caddy'
+  export MOCK_PCT_CONFIG_100="hostname: caddy"
+  run bash "$REPO_ROOT/caddy/push-caddyfile.sh" --file "$MOCK_TMPDIR/does-not-exist" 2>&1
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"generate-caddyfile"* ]]
+}
+
+@test "caddy generate delegates the push step to push-caddyfile.sh" {
+  /usr/bin/grep -q "push-caddyfile.sh" "$REPO_ROOT/caddy/generate-caddyfile.sh"
+  run bash -n "$REPO_ROOT/caddy/generate-caddyfile.sh"
+  [ "$status" -eq 0 ]
+}

@@ -151,7 +151,7 @@ while IFS= read -r cid; do
     [ -z "$name" ] && continue
     [ "$name" = "$CADDY_CONTAINER_NAME" ] && continue
 
-    ip=$(get_container_ip "$cid")
+    ip=$(get_container_ip "$cid" || true)
     [ -z "$ip" ] && continue
 
     GUEST_IDS+=("$cid")
@@ -174,10 +174,10 @@ while IFS= read -r vmid; do
         continue
     fi
 
-    json=$(qm guest exec "$vmid" -- hostname -I 2>/dev/null)
+    json=$(qm guest exec "$vmid" -- hostname -I 2>/dev/null || true)
     ip=$(echo "$json" | jq -r '.["out-data"] // .["out"] // empty' 2>/dev/null | awk '{print $1}' || true)
     if [ -z "$ip" ]; then
-        json=$(qm guest exec "$vmid" -- ip -4 addr show 2>/dev/null)
+        json=$(qm guest exec "$vmid" -- ip -4 addr show 2>/dev/null || true)
         ip=$(echo "$json" | jq -r '.["out-data"] // .["out"] // empty' 2>/dev/null | grep -oP 'inet \K[\d.]+' | grep -v '^127\.' | head -1 || true)
     fi
     if [ -z "$ip" ]; then
@@ -243,7 +243,7 @@ for i in $(seq 0 $((TOTAL - 1))); do
         fi
     else
         if qm status "$gid" 2>/dev/null | grep -q "running"; then
-            output=$(qm guest exec "$gid" -- ss -tlnp 2>/dev/null)
+            output=$(qm guest exec "$gid" -- ss -tlnp 2>/dev/null || true)
             listening_ports=$(echo "$output" | jq -r '.["out-data"] // .["out"] // empty' 2>/dev/null | tail -n +2 | awk '{n=split($4, a, ":"); print a[n]}' | sort -n | uniq || true)
         fi
     fi
@@ -370,11 +370,7 @@ echo ""
 cat "$LOCAL_CADDYFILE"
 
 # --- Push to Caddy container and reload ---
-log_step "Pushing to Caddy container ($CADDY_ID)..."
-pct push "$CADDY_ID" "$LOCAL_CADDYFILE" /etc/caddy/Caddyfile
-
-log_step "Reloading Caddy..."
-pct exec "$CADDY_ID" -- systemctl reload caddy
+"$SCRIPT_DIR/push-caddyfile.sh"
 
 # --- If any Nextcloud guest is configured, run trust-nextcloud.sh ---
 for i in $(seq 0 $((TOTAL - 1))); do
