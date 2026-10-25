@@ -321,6 +321,7 @@ EOF
   export CODING_VM_KVM_DEVICE="$MOCK_TMPDIR/kvm"
   export CODING_VM_SKIP_APT="1"
   export CODING_VM_USER="testuser"
+  export CODING_VM_GUI="1"
   export CODING_VM_RDP_USER="rdpuser"
   export CODING_VM_RDP_PASSWORD="fixture-pass"
   export CODING_VM_RDP_CERT_DIR="$MOCK_TMPDIR/certs"
@@ -344,6 +345,7 @@ EOF
   export CODING_VM_KVM_DEVICE="$MOCK_TMPDIR/kvm"
   export CODING_VM_SKIP_APT="1"
   export CODING_VM_USER="testuser"
+  export CODING_VM_GUI="1"
   export CODING_VM_RDP_USER="rdpuser"
   unset CODING_VM_RDP_PASSWORD
   export CODING_VM_RDP_CERT_DIR="$MOCK_TMPDIR/certs2"
