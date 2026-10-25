@@ -333,6 +333,65 @@ wait_vm_ready() {
     return 1
 }
 
+# Runs a command in a VM via the guest agent, surviving the exec timeout.
+# qm guest exec waits at most --timeout seconds; when it fires it prints
+# {"pid": N} while the guest keeps running the command. This polls
+# exec-status until the command exits and returns the guest exit code, so
+# long upgrades don't abort the caller. Prints the final result JSON.
+# Poll interval honors GUEST_EXEC_WAIT_SLEEP (default 10s, instant under mocks).
+# Usage: guest_exec_wait <vmid> [timeout_secs] [max_polls] -- <command> [args...]
+guest_exec_wait() {
+    local vmid="${1:-}"
+    local timeout_secs="${2:-300}"
+    local max_polls="${3:-60}"
+    if [ -z "$vmid" ]; then
+        log_error "guest_exec_wait: missing vmid"
+        return 1
+    fi
+    shift 3 || return 1
+    if [ "${1:-}" = "--" ]; then
+        shift
+    fi
+    if [ $# -eq 0 ]; then
+        log_error "guest_exec_wait: missing command"
+        return 1
+    fi
+
+    local poll_sleep="${GUEST_EXEC_WAIT_SLEEP:-10}"
+    local result pid exited exitcode polls
+    result=$(qm guest exec "$vmid" --timeout "$timeout_secs" -- "$@" 2>/dev/null || true)
+    if [ -z "$result" ]; then
+        log_error "VM $vmid guest exec produced no output."
+        return 1
+    fi
+    pid=$(echo "$result" | jq -r '.pid // empty' 2>/dev/null || true)
+    exited=$(echo "$result" | jq -r '.exited // 0' 2>/dev/null || true)
+    if [ -n "$pid" ] && [ "$exited" != "1" ]; then
+        log_info "VM $vmid command still running (pid $pid); waiting for it to finish..."
+        polls=0
+        while [ "$polls" -lt "$max_polls" ]; do
+            sleep "$poll_sleep"
+            polls=$((polls + 1))
+            result=$(qm guest exec-status "$vmid" "$pid" 2>/dev/null || true)
+            [ -z "$result" ] && continue
+            exited=$(echo "$result" | jq -r '.exited // 0' 2>/dev/null || true)
+            if [ "$exited" = "1" ]; then
+                break
+            fi
+        done
+        if [ "$exited" != "1" ]; then
+            log_error "VM $vmid command (pid $pid) still running after $((max_polls * poll_sleep))s."
+            return 1
+        fi
+    fi
+    echo "$result"
+    exitcode=$(echo "$result" | jq -r '.exitcode // 1' 2>/dev/null || true)
+    if ! [[ "$exitcode" =~ ^[0-9]+$ ]]; then
+        exitcode=1
+    fi
+    return "$exitcode"
+}
+
 # Returns the VM ID by its name (partial match, case-insensitive)
 # Usage: get_vm_id_by_name "name"
 get_vm_id_by_name() {

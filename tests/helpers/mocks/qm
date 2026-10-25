@@ -52,6 +52,21 @@ EOF
     # qm guest exec <vmid> -- <cmd>
     sub="${2:-}"
     if [ "$sub" = "exec" ]; then
+      # Dedicated answer for the DNS pre-flight used by update scripts.
+      if [[ "$*" == *"getent hosts"* ]]; then
+        if [ "${MOCK_QM_GUEST_GETENT_FAIL:-0}" = "1" ]; then
+          echo '{"out-data": "", "err-data": "", "exitcode": 2, "exited": 1}'
+        else
+          echo '{"out-data": "91.189.91.83\n", "exitcode": 0, "exited": 1}'
+        fi
+        exit 0
+      fi
+      # Simulate the client-side timeout: only {"pid": N} is returned while
+      # the guest keeps running; the caller must poll exec-status.
+      if [ "${MOCK_QM_GUEST_EXEC_TIMEOUT:-0}" = "1" ]; then
+        echo '{"pid": 1568}'
+        exit 0
+      fi
       if [ -n "${MOCK_QM_GUEST_EXEC_OUTPUT:-}" ]; then
         echo -e "$MOCK_QM_GUEST_EXEC_OUTPUT"
       elif [[ "$*" == *"hostname -I"* ]]; then
@@ -65,6 +80,14 @@ EOF
       fi
       if [ "${MOCK_QM_GUEST_FAIL:-0}" = "1" ]; then
         exit 1
+      fi
+      exit 0
+    fi
+    if [ "$sub" = "exec-status" ]; then
+      if [ -n "${MOCK_QM_GUEST_EXEC_STATUS:-}" ]; then
+        echo -e "$MOCK_QM_GUEST_EXEC_STATUS"
+      else
+        echo '{"exited": 1, "exitcode": 0, "out-data": "", "err-data": ""}'
       fi
       exit 0
     fi

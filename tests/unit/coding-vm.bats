@@ -218,11 +218,46 @@ EOF
 }
 
 @test "coding-vm update upgrades via guest agent when running" {
+  unset MOCK_QM_GUEST_EXEC_TIMEOUT MOCK_QM_GUEST_EXEC_STATUS MOCK_QM_GUEST_EXEC_OUTPUT
   export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n201  code                   running    8192              80.00 12345'
   export MOCK_QM_STATUS="status: running"
   run bash "$REPO_ROOT/coding-vm/update.sh" 2>&1
   [ "$status" -eq 0 ]
   grep -q "^qm guest exec" "$MOCK_LOG"
+}
+
+@test "coding-vm update waits for the upgrade past the exec timeout" {
+  unset MOCK_QM_GUEST_EXEC_OUTPUT
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n201  code                   running    8192              80.00 12345'
+  export MOCK_QM_STATUS="status: running"
+  export MOCK_QM_GUEST_EXEC_TIMEOUT=1
+  export MOCK_QM_GUEST_EXEC_STATUS='{"exited": 1, "exitcode": 0, "out-data": "", "err-data": ""}'
+  run bash "$REPO_ROOT/coding-vm/update.sh" 2>&1
+  [ "$status" -eq 0 ]
+  grep -q "^qm guest exec-status" "$MOCK_LOG"
+  unset MOCK_QM_GUEST_EXEC_TIMEOUT MOCK_QM_GUEST_EXEC_STATUS
+}
+
+@test "coding-vm update fails when guest apt fails" {
+  unset MOCK_QM_GUEST_EXEC_TIMEOUT MOCK_QM_GUEST_EXEC_STATUS MOCK_QM_GUEST_GETENT_FAIL
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n201  code                   running    8192              80.00 12345'
+  export MOCK_QM_STATUS="status: running"
+  export MOCK_QM_GUEST_EXEC_OUTPUT='{"out-data": "", "err-data": "E: boom", "exitcode": 100, "exited": 1}'
+  run bash "$REPO_ROOT/coding-vm/update.sh" 2>&1
+  [ "$status" -ne 0 ]
+  unset MOCK_QM_GUEST_EXEC_OUTPUT
+}
+
+@test "coding-vm update aborts early without guest DNS" {
+  unset MOCK_QM_GUEST_EXEC_TIMEOUT MOCK_QM_GUEST_EXEC_STATUS MOCK_QM_GUEST_EXEC_OUTPUT
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n201  code                   running    8192              80.00 12345'
+  export MOCK_QM_STATUS="status: running"
+  export MOCK_QM_GUEST_GETENT_FAIL=1
+  run bash "$REPO_ROOT/coding-vm/update.sh" 2>&1
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"DNS"* ]]
+  ! grep -q "apt-get upgrade" "$MOCK_LOG"
+  unset MOCK_QM_GUEST_GETENT_FAIL
 }
 
 # -------------------------------------------------------------------

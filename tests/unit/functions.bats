@@ -505,3 +505,60 @@ net0: name=eth0,bridge=vmbr0,ip=10.0.0.99/24,ip=10.0.0.99"
   [ "$status" -ne 0 ]
 }
 
+
+# -------------------------------------------------------------------
+# guest_exec_wait
+# -------------------------------------------------------------------
+
+@test "guest_exec_wait returns guest exit code on synchronous completion" {
+  unset MOCK_QM_GUEST_EXEC_TIMEOUT MOCK_QM_GUEST_EXEC_STATUS MOCK_QM_GUEST_EXEC_OUTPUT
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; guest_exec_wait 201 30 3 -- true'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"exitcode": 0'* ]]
+  grep -q "^qm guest exec 201" "$MOCK_LOG"
+}
+
+@test "guest_exec_wait fails when the guest command fails synchronously" {
+  unset MOCK_QM_GUEST_EXEC_TIMEOUT MOCK_QM_GUEST_EXEC_STATUS
+  export MOCK_QM_GUEST_EXEC_OUTPUT='{"out-data": "", "err-data": "E: boom", "exitcode": 100, "exited": 1}'
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; guest_exec_wait 201 30 3 -- apt-get upgrade -y'
+  [ "$status" -eq 100 ]
+  unset MOCK_QM_GUEST_EXEC_OUTPUT
+}
+
+@test "guest_exec_wait polls exec-status past the exec timeout" {
+  unset MOCK_QM_GUEST_EXEC_OUTPUT
+  export MOCK_QM_GUEST_EXEC_TIMEOUT=1
+  export MOCK_QM_GUEST_EXEC_STATUS='{"exited": 1, "exitcode": 0, "out-data": "done", "err-data": ""}'
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; guest_exec_wait 201 30 3 -- apt-get upgrade -y'
+  [ "$status" -eq 0 ]
+  grep -q "^qm guest exec-status 201 1568" "$MOCK_LOG"
+  [[ "$output" == *'"out-data": "done"'* ]]
+  unset MOCK_QM_GUEST_EXEC_TIMEOUT MOCK_QM_GUEST_EXEC_STATUS
+}
+
+@test "guest_exec_wait mirrors a failed command found via exec-status" {
+  unset MOCK_QM_GUEST_EXEC_OUTPUT
+  export MOCK_QM_GUEST_EXEC_TIMEOUT=1
+  export MOCK_QM_GUEST_EXEC_STATUS='{"exited": 1, "exitcode": 100, "out-data": "", "err-data": "E: boom"}'
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; guest_exec_wait 201 30 3 -- apt-get upgrade -y'
+  [ "$status" -eq 100 ]
+  unset MOCK_QM_GUEST_EXEC_TIMEOUT MOCK_QM_GUEST_EXEC_STATUS
+}
+
+@test "guest_exec_wait gives up when the guest never finishes" {
+  unset MOCK_QM_GUEST_EXEC_OUTPUT
+  export MOCK_QM_GUEST_EXEC_TIMEOUT=1
+  export MOCK_QM_GUEST_EXEC_STATUS='{"exited": 0}'
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; guest_exec_wait 201 30 2 -- apt-get upgrade -y'
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"still running"* ]]
+  unset MOCK_QM_GUEST_EXEC_TIMEOUT MOCK_QM_GUEST_EXEC_STATUS
+}
+
+@test "guest_exec_wait rejects missing arguments" {
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; guest_exec_wait "" 30 3 -- true'
+  [ "$status" -ne 0 ]
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; guest_exec_wait 201 30 3'
+  [ "$status" -ne 0 ]
+}
