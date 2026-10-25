@@ -370,11 +370,7 @@ echo ""
 cat "$LOCAL_CADDYFILE"
 
 # --- Push to Caddy container and reload ---
-log_step "Pushing to Caddy container ($CADDY_ID)..."
-pct push "$CADDY_ID" "$LOCAL_CADDYFILE" /etc/caddy/Caddyfile
-
-log_step "Reloading Caddy..."
-pct exec "$CADDY_ID" -- systemctl reload caddy
+"$SCRIPT_DIR/push-caddyfile.sh"
 
 # --- If any Nextcloud guest is configured, run trust-nextcloud.sh ---
 for i in $(seq 0 $((TOTAL - 1))); do
