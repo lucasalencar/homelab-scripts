@@ -78,7 +78,47 @@ check_rdp() {
     systemctl is-active --quiet gnome-remote-desktop || { log_error "gnome-remote-desktop service is not active."; exit 1; }
     [ -f "$RDP_CERT_DIR/rdp-tls.crt" ] || { log_error "RDP TLS certificate missing."; exit 1; }
     [ -f "$RDP_CERT_DIR/rdp-tls.key" ] || { log_error "RDP TLS key missing."; exit 1; }
+    rdp_open=0
+    for _ in 1 2 3 4 5; do
+        if ss -ltn 2>/dev/null | grep -q ':3389'; then
+            rdp_open=1
+            break
+        fi
+        sleep 2
+    done
+    if [ "$rdp_open" != "1" ]; then
+        log_error "Nothing listening on 3389 (is the display manager running?)."
+        exit 1
+    fi
     log_success "system RDP is active."
+}
+
+setup_display_manager() {
+    log_step "Enabling desktop services..."
+    systemctl set-default graphical.target || true
+    # gdm.service is static (no [Install]): 'enable' is a no-op, and a
+    # cloud-image + apt desktop install never creates
+    # display-manager.service, which graphical.target pulls via Wants=.
+    dm_link="${CODING_VM_DM_LINK:-/etc/systemd/system/display-manager.service}"
+    if [ ! -e "$dm_link" ]; then
+        log_step "Registering gdm as display manager..."
+        gdm_fragment="${CODING_VM_GDM_FRAGMENT:-}"
+        if [ -z "$gdm_fragment" ]; then
+            for candidate in /usr/lib/systemd/system/gdm.service /lib/systemd/system/gdm.service; do
+                if [ -f "$candidate" ]; then
+                    gdm_fragment="$candidate"
+                    break
+                fi
+            done
+        fi
+        if [ -z "$gdm_fragment" ]; then
+            log_warning "gdm unit not found; skipping display-manager registration."
+        else
+            ln -sf "$gdm_fragment" "$dm_link"
+            systemctl daemon-reload
+        fi
+    fi
+    systemctl start display-manager.service 2>/dev/null || systemctl start gdm.service
 }
 
 setup_rdp_system() {
@@ -106,7 +146,8 @@ setup_rdp_system() {
     grdctl --system rdp set-credentials "$RDP_USER" "$RDP_PASSWORD"
     grdctl --system rdp enable
     grdctl --system rdp disable-view-only || true
-    systemctl enable --now gnome-remote-desktop.service
+    systemctl enable gnome-remote-desktop.service
+    systemctl restart gnome-remote-desktop.service
     rm -f "$RDP_ENV_FILE"
     log_success "System RDP enabled on 3389."
 }
@@ -143,6 +184,8 @@ if [ "$GUI" = "0" ]; then
     log_step "Disabling desktop services (headless)..."
     systemctl set-default multi-user.target || true
     systemctl disable --now gdm gdm3 gnome-remote-desktop.service 2>/dev/null || true
+else
+    setup_display_manager
 fi
 
 if [ -n "$GUEST_USER" ] && id "$GUEST_USER" >/dev/null 2>&1; then

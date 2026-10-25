@@ -10,6 +10,8 @@ after first login.
 |---|---|---|
 | `install.sh` | Proxmox host, as root | Creates the `code` VM, provisions the guest and validates KVM. |
 | `provision.sh` | Inside the guest (called by `install.sh`) | System packages, KVM group, SSH/RDP. `--check-only` runs validations. |
+| `enable-gui.sh` | Proxmox host, as root | Re-provisions an existing VM with desktop + RDP (no reinstall). |
+| `disable-gui.sh` | Proxmox host, as root | Re-provisions an existing VM back to headless (SSH only). |
 | `ssh-setup.sh [user@]<vm_ip>` | Your Mac / client, as your user | SSH key, key copy to the VM, `Host code` config entry. |
 | `update.sh` | Proxmox host, as root | Upgrades guest packages via the guest agent. |
 
@@ -81,10 +83,29 @@ Android SDK): the system base (KVM, SSH) is already in place.
 ./coding-vm/update.sh
 ```
 
+### Toggling the desktop on an existing VM (on Proxmox, as root)
+
+`install.sh` skips VMs that already exist, so use these to switch modes
+without reinstalling. Both start the VM if it is stopped and validate
+the guest at the end.
+
+```bash
+# Headless -> desktop + RDP (installs ~1GB of packages)
+CODING_VM_RDP_USER=rdpuser CODING_VM_RDP_PASSWORD='...' ./coding-vm/enable-gui.sh
+# Connect with any RDP client at <vm-ip>:3389
+
+# Desktop -> headless (SSH only, desktop services disabled)
+./coding-vm/disable-gui.sh
+```
+
+Overrides: `CODING_VM_NAME`, `CODING_VM_PROVISION_KEY_FILE`,
+`CODING_VM_WAIT_TIMEOUT` (both scripts), plus `CODING_VM_RDP_USER`,
+`CODING_VM_RDP_PASSWORD`, `CODING_VM_RDP_CERT_DIR` (`enable-gui.sh`).
+
 ## Customization
 
 ```bash
-CODING_VM_CORES=6 CODING_VM_MEMORY_MB=8192 CODING_VM_DISK_GB=60 \
+CODING_VM_CORES=6 CODING_VM_MEMORY_MB=12288 CODING_VM_DISK_GB=60 \
   CODING_VM_SSH_PUBKEY_FILE=/home/<user>/code-mac.pub ./coding-vm/install.sh
 ```
 
@@ -102,7 +123,7 @@ Headless is the default (no desktop, no RDP — SSH/VS Code only):
 CODING_VM_SSH_PUBKEY_FILE=/home/<user>/code-mac.pub ./coding-vm/install.sh
 ```
 
-With desktop + RDP (~1GB extra RAM):
+With desktop + RDP (~1GB extra RAM on top of the 12GB default):
 
 ```bash
 CODING_VM_GUI=1 CODING_VM_RDP_USER=rdpuser CODING_VM_RDP_PASSWORD='...' \
@@ -111,10 +132,14 @@ CODING_VM_GUI=1 CODING_VM_RDP_USER=rdpuser CODING_VM_RDP_PASSWORD='...' \
 
 RDP requires the desktop (`CODING_VM_GUI=1`).
 
-```bash
-CODING_VM_RDP_USER=rdpuser CODING_VM_RDP_PASSWORD='...' \
-  CODING_VM_SSH_PUBKEY_FILE=/home/<user>/code-mac.pub ./coding-vm/install.sh
-```
+### Memory / balloon
+
+Defaults are `CODING_VM_MEMORY_MB=12288` (12GB ceiling) and
+`CODING_VM_BALLOON_MB=8192` (8GB floor). Proxmox uses `memory` as the
+maximum and `balloon` as the minimum the guest can be squeezed to under
+host pressure — keeping the floor at 8GB avoids the freezes seen when
+heavy coding workloads were squeezed toward the old 2GB floor, while
+still letting the host reclaim the idle headroom above 8GB.
 
 Custom `CODING_VM_IMAGE_URL` must keep the Ubuntu-cloud layout (a sibling
 `SHA256SUMS` file in the same directory with a matching entry), or set

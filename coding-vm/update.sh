@@ -27,9 +27,20 @@ if [ "$vm_status" != "running" ]; then
     exit 0
 fi
 
+# Fail fast with a clear message when guest DNS is broken — apt would
+# otherwise spew a resolution error per source and abort mid-script.
+if ! guest_exec_wait "$vm_id" 60 6 -- getent hosts archive.ubuntu.com >/dev/null 2>&1; then
+    log_error "VM $vm_id cannot resolve archive.ubuntu.com — guest DNS is broken. Inspect with 'qm guest cmd $vm_id network-get-interfaces' (missing DHCP lease? try netplan apply) and re-run."
+    exit 1
+fi
+
 log_step "Running apt update and upgrade inside VM $vm_id..."
-qm guest exec "$vm_id" -- apt-get update
-qm guest exec "$vm_id" -- apt-get upgrade -y
-qm guest exec "$vm_id" -- snap refresh 2>/dev/null || log_warning "snap refresh skipped."
+# Non-interactive frontend: with no tty, debconf falls back noisily and any
+# prompt would hang the guest-side command indefinitely.
+# guest_exec_wait survives the qm exec timeout by polling exec-status until
+# the guest command exits, then mirrors its exit code.
+guest_exec_wait "$vm_id" 120 30 -- env DEBIAN_FRONTEND=noninteractive apt-get update
+guest_exec_wait "$vm_id" 600 180 -- env DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+guest_exec_wait "$vm_id" 300 30 -- snap refresh 2>/dev/null || log_warning "snap refresh skipped."
 
 log_success "Coding VM update process complete!"

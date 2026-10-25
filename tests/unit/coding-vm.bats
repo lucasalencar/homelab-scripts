@@ -69,6 +69,28 @@ _install_env() {
   grep -q "discard=on,ssd=1" "$MOCK_LOG"
 }
 
+@test "coding-vm install defaults to 12GB memory with 8GB balloon floor" {
+  _install_env
+  unset CODING_VM_MEMORY_MB
+  unset CODING_VM_BALLOON_MB
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  home-assistant       running    4096              32.00 12345'
+  run bash "$REPO_ROOT/coding-vm/install.sh"
+  [ "$status" -eq 0 ]
+  grep -q -- "--memory 12288" "$MOCK_LOG"
+  grep -q -- "--balloon 8192" "$MOCK_LOG"
+}
+
+@test "coding-vm install respects memory/balloon overrides" {
+  _install_env
+  export CODING_VM_MEMORY_MB="16384"
+  export CODING_VM_BALLOON_MB="8192"
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  home-assistant       running    4096              32.00 12345'
+  run bash "$REPO_ROOT/coding-vm/install.sh"
+  [ "$status" -eq 0 ]
+  grep -q -- "--memory 16384" "$MOCK_LOG"
+  grep -q -- "--balloon 8192" "$MOCK_LOG"
+}
+
 @test "coding-vm install verifies image against Ubuntu SHA256SUMS star-marker format" {
   _install_env
   export CODING_VM_SKIP_DOWNLOAD="0"
@@ -196,11 +218,46 @@ EOF
 }
 
 @test "coding-vm update upgrades via guest agent when running" {
+  unset MOCK_QM_GUEST_EXEC_TIMEOUT MOCK_QM_GUEST_EXEC_STATUS MOCK_QM_GUEST_EXEC_OUTPUT
   export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n201  code                   running    8192              80.00 12345'
   export MOCK_QM_STATUS="status: running"
   run bash "$REPO_ROOT/coding-vm/update.sh" 2>&1
   [ "$status" -eq 0 ]
   grep -q "^qm guest exec" "$MOCK_LOG"
+}
+
+@test "coding-vm update waits for the upgrade past the exec timeout" {
+  unset MOCK_QM_GUEST_EXEC_OUTPUT
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n201  code                   running    8192              80.00 12345'
+  export MOCK_QM_STATUS="status: running"
+  export MOCK_QM_GUEST_EXEC_TIMEOUT=1
+  export MOCK_QM_GUEST_EXEC_STATUS='{"exited": 1, "exitcode": 0, "out-data": "", "err-data": ""}'
+  run bash "$REPO_ROOT/coding-vm/update.sh" 2>&1
+  [ "$status" -eq 0 ]
+  grep -q "^qm guest exec-status" "$MOCK_LOG"
+  unset MOCK_QM_GUEST_EXEC_TIMEOUT MOCK_QM_GUEST_EXEC_STATUS
+}
+
+@test "coding-vm update fails when guest apt fails" {
+  unset MOCK_QM_GUEST_EXEC_TIMEOUT MOCK_QM_GUEST_EXEC_STATUS MOCK_QM_GUEST_GETENT_FAIL
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n201  code                   running    8192              80.00 12345'
+  export MOCK_QM_STATUS="status: running"
+  export MOCK_QM_GUEST_EXEC_OUTPUT='{"out-data": "", "err-data": "E: boom", "exitcode": 100, "exited": 1}'
+  run bash "$REPO_ROOT/coding-vm/update.sh" 2>&1
+  [ "$status" -ne 0 ]
+  unset MOCK_QM_GUEST_EXEC_OUTPUT
+}
+
+@test "coding-vm update aborts early without guest DNS" {
+  unset MOCK_QM_GUEST_EXEC_TIMEOUT MOCK_QM_GUEST_EXEC_STATUS MOCK_QM_GUEST_EXEC_OUTPUT
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n201  code                   running    8192              80.00 12345'
+  export MOCK_QM_STATUS="status: running"
+  export MOCK_QM_GUEST_GETENT_FAIL=1
+  run bash "$REPO_ROOT/coding-vm/update.sh" 2>&1
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"DNS"* ]]
+  ! grep -q "apt-get upgrade" "$MOCK_LOG"
+  unset MOCK_QM_GUEST_GETENT_FAIL
 }
 
 # -------------------------------------------------------------------
@@ -299,6 +356,22 @@ EOF
 # coding-vm/provision.sh system RDP (grdctl --system, headless-safe)
 # -------------------------------------------------------------------
 
+# Shadow `ss` with canned listener output (no ss mock ships in
+# helpers/mocks). Set MOCK_SS_OUTPUT to the `ss -ltn` lines to report.
+_mock_ss() {
+  mkdir -p "$MOCK_TMPDIR/bin"
+  cat > "$MOCK_TMPDIR/bin/ss" <<'EOF'
+#!/usr/bin/env bash
+echo "ss $*" >> "$MOCK_LOG"
+printf '%s\n' "${MOCK_SS_OUTPUT:-}"
+exit 0
+EOF
+  # NOTE: chmod is shadowed by a no-op logging mock under test PATH —
+  # newly created fixtures need the real binary to become executable.
+  /bin/chmod +x "$MOCK_TMPDIR/bin/ss"
+  export PATH="$MOCK_TMPDIR/bin:$PATH"
+}
+
 @test "coding-vm provision skips system RDP without credentials" {
   touch "$MOCK_TMPDIR/kvm"
   export CODING_VM_TEST_MODE="1"
@@ -320,12 +393,18 @@ EOF
   export CODING_VM_TEST_MODE="1"
   export CODING_VM_KVM_DEVICE="$MOCK_TMPDIR/kvm"
   export CODING_VM_SKIP_APT="1"
+  export CODING_VM_GUI="1"
   export CODING_VM_USER="testuser"
   export CODING_VM_GUI="1"
   export CODING_VM_RDP_USER="rdpuser"
   export CODING_VM_RDP_PASSWORD="fixture-pass"
   export CODING_VM_RDP_CERT_DIR="$MOCK_TMPDIR/certs"
   export CODING_VM_RDP_ENV_FILE="$MOCK_TMPDIR/no-rdp.env"
+  _mock_ss
+  export MOCK_SS_OUTPUT="LISTEN 0 4096 0.0.0.0:3389 0.0.0.0:*"
+  export CODING_VM_DM_LINK="$MOCK_TMPDIR/display-manager.service"
+  touch "$MOCK_TMPDIR/gdm.service"
+  export CODING_VM_GDM_FRAGMENT="$MOCK_TMPDIR/gdm.service"
   : > "$MOCK_LOG"
   run bash "$REPO_ROOT/coding-vm/provision.sh"
   [ "$status" -eq 0 ]
@@ -339,11 +418,35 @@ EOF
   [ -f "$MOCK_TMPDIR/certs/rdp-tls.key" ]
 }
 
+@test "coding-vm provision restarts gnome-remote-desktop to apply RDP config" {
+  touch "$MOCK_TMPDIR/kvm"
+  export CODING_VM_TEST_MODE="1"
+  export CODING_VM_KVM_DEVICE="$MOCK_TMPDIR/kvm"
+  export CODING_VM_SKIP_APT="1"
+  export CODING_VM_GUI="1"
+  export CODING_VM_USER="testuser"
+  export CODING_VM_RDP_USER="rdpuser"
+  export CODING_VM_RDP_PASSWORD="fixture-pass"
+  export CODING_VM_RDP_CERT_DIR="$MOCK_TMPDIR/certs6"
+  export CODING_VM_RDP_ENV_FILE="$MOCK_TMPDIR/no-rdp.env"
+  unset MOCK_SYSTEMCTL_FAIL
+  _mock_ss
+  export MOCK_SS_OUTPUT="LISTEN 0 4096 0.0.0.0:3389 0.0.0.0:*"
+  export CODING_VM_DM_LINK="$MOCK_TMPDIR/dm-rdp.service"
+  touch "$MOCK_TMPDIR/gdm.service"
+  export CODING_VM_GDM_FRAGMENT="$MOCK_TMPDIR/gdm.service"
+  : > "$MOCK_LOG"
+  run bash "$REPO_ROOT/coding-vm/provision.sh"
+  [ "$status" -eq 0 ]
+  grep -q "restart.*gnome-remote-desktop" "$MOCK_LOG"
+}
+
 @test "coding-vm provision loads RDP password from env file" {
   touch "$MOCK_TMPDIR/kvm"
   export CODING_VM_TEST_MODE="1"
   export CODING_VM_KVM_DEVICE="$MOCK_TMPDIR/kvm"
   export CODING_VM_SKIP_APT="1"
+  export CODING_VM_GUI="1"
   export CODING_VM_USER="testuser"
   export CODING_VM_GUI="1"
   export CODING_VM_RDP_USER="rdpuser"
@@ -351,6 +454,11 @@ EOF
   export CODING_VM_RDP_CERT_DIR="$MOCK_TMPDIR/certs2"
   export CODING_VM_RDP_ENV_FILE="$MOCK_TMPDIR/rdp.env"
   printf "CODING_VM_RDP_PASSWORD='file-pass'\n" > "$MOCK_TMPDIR/rdp.env"
+  _mock_ss
+  export MOCK_SS_OUTPUT="LISTEN 0 4096 0.0.0.0:3389 0.0.0.0:*"
+  export CODING_VM_DM_LINK="$MOCK_TMPDIR/display-manager.service"
+  touch "$MOCK_TMPDIR/gdm.service"
+  export CODING_VM_GDM_FRAGMENT="$MOCK_TMPDIR/gdm.service"
   : > "$MOCK_LOG"
   run bash "$REPO_ROOT/coding-vm/provision.sh"
   [ "$status" -eq 0 ]
@@ -370,6 +478,43 @@ EOF
   export MOCK_SYSTEMCTL_FAIL="1"
   run bash "$REPO_ROOT/coding-vm/provision.sh" --check-only
   [ "$status" -ne 0 ]
+}
+
+@test "coding-vm provision check-only fails when RDP port is not listening" {
+  touch "$MOCK_TMPDIR/kvm"
+  export CODING_VM_TEST_MODE="1"
+  export CODING_VM_KVM_DEVICE="$MOCK_TMPDIR/kvm"
+  unset MOCK_SYSTEMCTL_FAIL
+  export CODING_VM_GUI="1"
+  export CODING_VM_RDP_USER="rdpuser"
+  export CODING_VM_RDP_PASSWORD="fixture-pass"
+  export CODING_VM_RDP_CERT_DIR="$MOCK_TMPDIR/certs4"
+  export CODING_VM_RDP_ENV_FILE="$MOCK_TMPDIR/no-rdp.env"
+  /bin/mkdir -p "$MOCK_TMPDIR/certs4"
+  touch "$MOCK_TMPDIR/certs4/rdp-tls.crt" "$MOCK_TMPDIR/certs4/rdp-tls.key"
+  _mock_ss
+  export MOCK_SS_OUTPUT="LISTEN 0 4096 0.0.0.0:22 0.0.0.0:*"
+  run bash "$REPO_ROOT/coding-vm/provision.sh" --check-only
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"3389"* ]]
+}
+
+@test "coding-vm provision check-only passes when RDP port is listening" {
+  touch "$MOCK_TMPDIR/kvm"
+  export CODING_VM_TEST_MODE="1"
+  export CODING_VM_KVM_DEVICE="$MOCK_TMPDIR/kvm"
+  unset MOCK_SYSTEMCTL_FAIL
+  export CODING_VM_GUI="1"
+  export CODING_VM_RDP_USER="rdpuser"
+  export CODING_VM_RDP_PASSWORD="fixture-pass"
+  export CODING_VM_RDP_CERT_DIR="$MOCK_TMPDIR/certs5"
+  export CODING_VM_RDP_ENV_FILE="$MOCK_TMPDIR/no-rdp.env"
+  /bin/mkdir -p "$MOCK_TMPDIR/certs5"
+  touch "$MOCK_TMPDIR/certs5/rdp-tls.crt" "$MOCK_TMPDIR/certs5/rdp-tls.key"
+  _mock_ss
+  export MOCK_SS_OUTPUT="LISTEN 0 4096 0.0.0.0:3389 0.0.0.0:*"
+  run bash "$REPO_ROOT/coding-vm/provision.sh" --check-only
+  [ "$status" -eq 0 ]
 }
 
 # -------------------------------------------------------------------
@@ -430,6 +575,9 @@ EOF
   unset CODING_VM_RDP_USER
   unset CODING_VM_RDP_PASSWORD
   export CODING_VM_RDP_ENV_FILE="$MOCK_TMPDIR/no-rdp.env"
+  export CODING_VM_DM_LINK="$MOCK_TMPDIR/dm-desktop.service"
+  touch "$MOCK_TMPDIR/gdm.service"
+  export CODING_VM_GDM_FRAGMENT="$MOCK_TMPDIR/gdm.service"
   : > "$MOCK_LOG"
   run bash "$REPO_ROOT/coding-vm/provision.sh"
   [ "$status" -eq 0 ]
@@ -473,6 +621,52 @@ EOF
   grep -q "disable.*gdm" "$MOCK_LOG"
 }
 
+@test "coding-vm provision enables graphical target and display manager when GUI enabled" {
+  touch "$MOCK_TMPDIR/kvm"
+  export CODING_VM_TEST_MODE="1"
+  export CODING_VM_KVM_DEVICE="$MOCK_TMPDIR/kvm"
+  export CODING_VM_SKIP_APT="1"
+  export CODING_VM_USER="testuser"
+  export CODING_VM_GUI="1"
+  unset CODING_VM_RDP_USER
+  unset CODING_VM_RDP_PASSWORD
+  unset MOCK_SYSTEMCTL_FAIL
+  export CODING_VM_RDP_ENV_FILE="$MOCK_TMPDIR/no-rdp.env"
+  export CODING_VM_DM_LINK="$MOCK_TMPDIR/dm-gui.service"
+  touch "$MOCK_TMPDIR/gdm.service"
+  export CODING_VM_GDM_FRAGMENT="$MOCK_TMPDIR/gdm.service"
+  rm -f "$MOCK_TMPDIR/dm-gui.service"
+  : > "$MOCK_LOG"
+  run bash "$REPO_ROOT/coding-vm/provision.sh"
+  [ "$status" -eq 0 ]
+  grep -q "graphical.target" "$MOCK_LOG"
+  grep -q "start display-manager" "$MOCK_LOG"
+  ! grep -q "disable.*gdm" "$MOCK_LOG"
+  [ -L "$MOCK_TMPDIR/dm-gui.service" ]
+}
+
+@test "coding-vm provision keeps an existing display-manager registration" {
+  touch "$MOCK_TMPDIR/kvm"
+  export CODING_VM_TEST_MODE="1"
+  export CODING_VM_KVM_DEVICE="$MOCK_TMPDIR/kvm"
+  export CODING_VM_SKIP_APT="1"
+  export CODING_VM_USER="testuser"
+  export CODING_VM_GUI="1"
+  unset CODING_VM_RDP_USER
+  unset CODING_VM_RDP_PASSWORD
+  unset MOCK_SYSTEMCTL_FAIL
+  export CODING_VM_RDP_ENV_FILE="$MOCK_TMPDIR/no-rdp.env"
+  export CODING_VM_DM_LINK="$MOCK_TMPDIR/dm-keep.service"
+  touch "$MOCK_TMPDIR/gdm.service"
+  export CODING_VM_GDM_FRAGMENT="$MOCK_TMPDIR/gdm.service"
+  ln -sf "$MOCK_TMPDIR/gdm.service" "$MOCK_TMPDIR/dm-keep.service"
+  : > "$MOCK_LOG"
+  run bash "$REPO_ROOT/coding-vm/provision.sh"
+  [ "$status" -eq 0 ]
+  [ "$(readlink "$MOCK_TMPDIR/dm-keep.service")" = "$MOCK_TMPDIR/gdm.service" ]
+  grep -q "start display-manager" "$MOCK_LOG"
+}
+
 @test "coding-vm provision skips RDP setup when headless even with credentials" {
   touch "$MOCK_TMPDIR/kvm"
   export CODING_VM_TEST_MODE="1"
@@ -506,4 +700,83 @@ EOF
   run bash "$REPO_ROOT/coding-vm/install.sh"
   [ "$status" -eq 0 ]
   grep -q "CODING_VM_GUI=0" "$MOCK_LOG"
+}
+
+# -------------------------------------------------------------------
+# coding-vm/enable-gui.sh and coding-vm/disable-gui.sh (host-side,
+# re-provision an existing VM to toggle the desktop + RDP stack)
+# -------------------------------------------------------------------
+
+_gui_env() {
+  _install_env
+  unset CODING_VM_RDP_USER
+  unset CODING_VM_RDP_PASSWORD
+  unset MOCK_QM_CONFIG_201
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n201  code                   running    12288             80.00 12345'
+  export MOCK_QM_STATUS="status: running"
+  touch "$CODING_VM_PROVISION_KEY_FILE"
+}
+
+@test "coding-vm enable-gui fails without RDP credentials" {
+  _gui_env
+  run bash "$REPO_ROOT/coding-vm/enable-gui.sh"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"RDP"* ]]
+  ! grep -q "^scp " "$MOCK_LOG"
+}
+
+@test "coding-vm enable-gui fails when VM is missing" {
+  _gui_env
+  export CODING_VM_RDP_USER="rdpuser"
+  export CODING_VM_RDP_PASSWORD="s3cret-xyz-123"
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  home-assistant       running    4096              32.00 12345'
+  run bash "$REPO_ROOT/coding-vm/enable-gui.sh"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"code"* ]]
+  ! grep -q "^scp " "$MOCK_LOG"
+}
+
+@test "coding-vm enable-gui provisions desktop with GUI=1 without leaking secret" {
+  _gui_env
+  export CODING_VM_RDP_USER="rdpuser"
+  export CODING_VM_RDP_PASSWORD="s3cret-xyz-123"
+  export MOCK_QM_CONFIG_201=$'ciuser: coder\ncores: 8\nmemory: 12288'
+  run bash "$REPO_ROOT/coding-vm/enable-gui.sh"
+  [ "$status" -eq 0 ]
+  grep -q "^scp .*provision.sh" "$MOCK_LOG"
+  grep -q "coding-vm-rdp.env" "$MOCK_LOG"
+  grep -q "CODING_VM_GUI=1" "$MOCK_LOG"
+  grep -q "coder@10.0.0.10" "$MOCK_LOG"
+  grep -q -- "--check-only" "$MOCK_LOG"
+  ! grep -q "s3cret-xyz-123" "$MOCK_LOG"
+}
+
+@test "coding-vm enable-gui starts a stopped VM before provisioning" {
+  _gui_env
+  export CODING_VM_RDP_USER="rdpuser"
+  export CODING_VM_RDP_PASSWORD="s3cret-xyz-123"
+  export MOCK_QM_STATUS="status: stopped"
+  run bash "$REPO_ROOT/coding-vm/enable-gui.sh"
+  [ "$status" -eq 0 ]
+  grep -q "^qm start" "$MOCK_LOG"
+  grep -q "CODING_VM_GUI=1" "$MOCK_LOG"
+}
+
+@test "coding-vm disable-gui provisions headless with GUI=0" {
+  _gui_env
+  run bash "$REPO_ROOT/coding-vm/disable-gui.sh"
+  [ "$status" -eq 0 ]
+  grep -q "^scp .*provision.sh" "$MOCK_LOG"
+  grep -q "CODING_VM_GUI=0" "$MOCK_LOG"
+  ! grep -q "coding-vm-rdp.env" "$MOCK_LOG"
+  grep -q -- "--check-only" "$MOCK_LOG"
+}
+
+@test "coding-vm disable-gui fails when VM is missing" {
+  _gui_env
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  home-assistant       running    4096              32.00 12345'
+  run bash "$REPO_ROOT/coding-vm/disable-gui.sh"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"code"* ]]
+  ! grep -q "^scp " "$MOCK_LOG"
 }
