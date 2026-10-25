@@ -6,6 +6,10 @@ setup() {
   export PATH="$BATS_TEST_DIRNAME/../helpers/mocks:$PATH"
   export REPO_ROOT="$BATS_TEST_DIRNAME/../.."
   export BASH_ENV="$BATS_TEST_DIRNAME/../helpers/bypass_root.sh"
+  # Hermetic HOME — global discovery executes dotfiles/update.sh, which
+  # must never touch the real ~/.dotfiles during tests.
+  export HOME="$MOCK_TMPDIR/home"
+  /bin/mkdir -p "$HOME"
 }
 
 teardown() {
