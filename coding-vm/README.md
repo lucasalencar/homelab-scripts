@@ -84,7 +84,7 @@ Android SDK): the system base (KVM, SSH) is already in place.
 ## Customization
 
 ```bash
-CODING_VM_CORES=6 CODING_VM_MEMORY_MB=8192 CODING_VM_DISK_GB=60 \
+CODING_VM_CORES=6 CODING_VM_MEMORY_MB=12288 CODING_VM_DISK_GB=60 \
   CODING_VM_SSH_PUBKEY_FILE=/home/<user>/code-mac.pub ./coding-vm/install.sh
 ```
 
@@ -102,7 +102,7 @@ Headless is the default (no desktop, no RDP — SSH/VS Code only):
 CODING_VM_SSH_PUBKEY_FILE=/home/<user>/code-mac.pub ./coding-vm/install.sh
 ```
 
-With desktop + RDP (~1GB extra RAM):
+With desktop + RDP (~1GB extra RAM on top of the 12GB default):
 
 ```bash
 CODING_VM_GUI=1 CODING_VM_RDP_USER=rdpuser CODING_VM_RDP_PASSWORD='...' \
@@ -111,10 +111,14 @@ CODING_VM_GUI=1 CODING_VM_RDP_USER=rdpuser CODING_VM_RDP_PASSWORD='...' \
 
 RDP requires the desktop (`CODING_VM_GUI=1`).
 
-```bash
-CODING_VM_RDP_USER=rdpuser CODING_VM_RDP_PASSWORD='...' \
-  CODING_VM_SSH_PUBKEY_FILE=/home/<user>/code-mac.pub ./coding-vm/install.sh
-```
+### Memory / balloon
+
+Defaults are `CODING_VM_MEMORY_MB=12288` (12GB ceiling) and
+`CODING_VM_BALLOON_MB=8192` (8GB floor). Proxmox uses `memory` as the
+maximum and `balloon` as the minimum the guest can be squeezed to under
+host pressure — keeping the floor at 8GB avoids the freezes seen when
+heavy coding workloads were squeezed toward the old 2GB floor, while
+still letting the host reclaim the idle headroom above 8GB.
 
 Custom `CODING_VM_IMAGE_URL` must keep the Ubuntu-cloud layout (a sibling
 `SHA256SUMS` file in the same directory with a matching entry), or set
