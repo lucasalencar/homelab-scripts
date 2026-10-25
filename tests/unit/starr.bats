@@ -159,22 +159,39 @@ teardown() {
   [ "$status" -eq 0 ]
 }
 
-@test "starr container update.sh delegates to self-update via update_required" {
-  /usr/bin/grep -q "update_required" "$REPO_ROOT/starr/container/update.sh"
-  /usr/bin/grep -q "Prowlarr" "$REPO_ROOT/starr/container/update.sh"
-  # No tarball re-download in update path
-  ! /usr/bin/grep -q "api.github.com" "$REPO_ROOT/starr/container/update.sh"
-  ! /usr/bin/grep -q "assets\[\]" "$REPO_ROOT/starr/container/update.sh"
+@test "starr container update.sh fetches latest Servarr tarballs directly (no self-update trigger)" {
+  # Deterministic update: download latest tarball + redeploy to /opt, like provision.sh.
+  # Must NOT depend on the in-app self-updater (touch update_required + restart),
+  # which is silently skipped when Settings -> General -> Updates -> Automatic is off.
+  /usr/bin/grep -q "servarr.com/v1/update" "$REPO_ROOT/starr/container/update.sh"
+  /usr/bin/grep -q "services.sonarr.tv" "$REPO_ROOT/starr/container/update.sh"
+  /usr/bin/grep -q "/opt/Prowlarr" "$REPO_ROOT/starr/container/update.sh"
+  /usr/bin/grep -q "/opt/Sonarr" "$REPO_ROOT/starr/container/update.sh"
+  /usr/bin/grep -q "/opt/Radarr" "$REPO_ROOT/starr/container/update.sh"
+  /usr/bin/grep -q "systemctl stop" "$REPO_ROOT/starr/container/update.sh"
+  # The legacy trigger only restarted and reported "active" even when nothing updated
+  ! /usr/bin/grep -q 'touch "$data_dir/update_required"' "$REPO_ROOT/starr/container/update.sh"
+  ! /usr/bin/grep -q "trigger_update" "$REPO_ROOT/starr/container/update.sh"
   run bash -n "$REPO_ROOT/starr/container/update.sh"
   [ "$status" -eq 0 ]
 }
 
-@test "starr container provision and update share similar deploy logic but distinct entrypoints" {
-  # Ensure they are not identical (provision deploys tarballs, update touches update_required)
+@test "starr container update.sh refreshes Bazarr code, not just pip deps" {
+  # Regression: update.sh only ran pip install -r requirements.txt on stale code,
+  # so Bazarr itself never updated.
+  /usr/bin/grep -q "bazarr.zip" "$REPO_ROOT/starr/container/update.sh"
+  /usr/bin/grep -q "systemctl stop bazarr" "$REPO_ROOT/starr/container/update.sh"
+  run bash -n "$REPO_ROOT/starr/container/update.sh"
+  [ "$status" -eq 0 ]
+}
+
+@test "starr container provision and update share deploy logic but distinct entrypoints" {
+  # Both download latest tarballs and deploy to /opt, but provision installs
+  # units from scratch while update stops/deploys/starts existing services.
   run bash -c 'diff -q "$REPO_ROOT/starr/container/provision.sh" "$REPO_ROOT/starr/container/update.sh" && echo same || echo diff'
   [[ "$output" == *"diff"* ]]
-  /usr/bin/grep -q "update_required" "$REPO_ROOT/starr/container/update.sh"
   /usr/bin/grep -q "servarr.com/v1/update" "$REPO_ROOT/starr/container/provision.sh"
+  /usr/bin/grep -q "servarr.com/v1/update" "$REPO_ROOT/starr/container/update.sh"
 }
 
 @test "starr container scripts declare ruamel.yaml dependency for configure fallback" {
