@@ -238,6 +238,7 @@ if [ -d /opt/seerr ] || [ -f /etc/systemd/system/seerr.service ]; then
         log "  seerr: active"
     else
         log "  seerr: not active after refresh"
+        failed=1
     fi
 else
     log "seerr not installed — skipping"

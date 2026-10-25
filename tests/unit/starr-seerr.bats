@@ -50,6 +50,13 @@ teardown() {
   [ "$status" -eq 0 ]
 }
 
+@test "starr container update.sh fails the run when Seerr ends inactive" {
+  /usr/bin/grep -q 'seerr: not active after refresh' "$REPO_ROOT/starr/container/update.sh"
+  /usr/bin/grep -A1 'seerr: not active after refresh' "$REPO_ROOT/starr/container/update.sh" | /usr/bin/grep -q "failed=1"
+  run bash -n "$REPO_ROOT/starr/container/update.sh"
+  [ "$status" -eq 0 ]
+}
+
 @test "starr container provision.sh guards pnpm and rate-limits Seerr restarts" {
   /usr/bin/grep -q "pnpm could not be installed" "$REPO_ROOT/starr/container/provision.sh"
   /usr/bin/grep -q "RestartSec=5" "$REPO_ROOT/starr/container/provision.sh"
