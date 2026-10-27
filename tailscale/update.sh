@@ -12,28 +12,23 @@ require_root
 ROUTER_NAME="${TAILSCALE_ROUTER_NAME:-tailscale-router}"
 LXC_CONF_DIR="${TAILSCALE_LXC_CONF_DIR:-/etc/pve/lxc}"
 
-container_id=$(get_exact_container_id_by_name "$ROUTER_NAME" || true)
+container_id=""
+resolve_rc=0
+container_id=$(get_exact_container_id_by_name "$ROUTER_NAME" 2>/dev/null) || resolve_rc=$?
+if [ "$resolve_rc" -eq 2 ]; then
+    log_error "Multiple containers named '$ROUTER_NAME' exist."
+    log_error "Remove or rename the duplicates instead of updating blindly."
+    exit 1
+fi
 if [ -z "$container_id" ]; then
     log_error "Could not find container '$ROUTER_NAME'. Run tailscale/install.sh first."
     exit 1
 fi
 log_info "Router container: $container_id"
 
-BRIDGE=$(detect_pve_bridge)
-if [ -n "${TAILSCALE_LAN_CIDR:-}" ]; then
-    LAN_CIDR="$TAILSCALE_LAN_CIDR"
-else
-    LAN_CIDR=$(detect_lan_cidr "$BRIDGE" || true)
-    if [ -z "$LAN_CIDR" ]; then
-        log_error "Could not determine the LAN CIDR on $BRIDGE."
-        log_error "Re-run with an explicit value: TAILSCALE_LAN_CIDR='192.168.15.0/24' bash tailscale/update.sh"
-        exit 1
-    fi
-fi
-if ! validate_ipv4_cidr "$LAN_CIDR"; then
-    log_error "Invalid LAN CIDR '$LAN_CIDR' (expected e.g. 192.168.15.0/24)."
-    exit 1
-fi
+tailscale_require_host_tun || exit 1
+
+LAN_CIDR=$(tailscale_resolve_lan_cidr "bash tailscale/update.sh") || exit 1
 
 # Re-converge the invariants install.sh creates, so update also repairs drift.
 log_step "Re-converging TUN passthrough and IP forwarding..."
@@ -44,10 +39,7 @@ log_step "Updating packages inside container $container_id..."
 pct exec "$container_id" -- apt update
 pct exec "$container_id" -- apt install -y --only-upgrade tailscale
 
-log_step "Re-asserting advertised routes ($LAN_CIDR)..."
-pct exec "$container_id" -- tailscale set --advertise-routes="$LAN_CIDR"
-
-pct exec "$container_id" -- tailscale status >/dev/null 2>&1 \
-    || { log_error "tailscale status failed — router is not on the tailnet"; exit 1; }
+tailscale_set_routes "$container_id" "$LAN_CIDR" || exit 1
+tailscale_verify_online "$container_id" || exit 1
 
 log_success "Tailscale update process complete!"

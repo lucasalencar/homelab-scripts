@@ -13,47 +13,22 @@ ROUTER_NAME="${TAILSCALE_ROUTER_NAME:-tailscale-router}"
 DNS_ZONE="${TAILSCALE_DNS_ZONE:-marx.home}"
 LXC_CONF_DIR="${TAILSCALE_LXC_CONF_DIR:-/etc/pve/lxc}"
 
-# Tailscale needs the host TUN device; nothing downstream can succeed without it.
-if [ ! -c /dev/net/tun ] && [ -z "${BATS_TEST_TMPDIR:-}" ]; then
-    log_error "/dev/net/tun is missing on this host — Tailscale cannot run without it."
-    log_error "Load it (modprobe tun) or reboot, then re-run."
-    exit 1
-fi
+tailscale_require_host_tun || exit 1
 
 BRIDGE=$(detect_pve_bridge)
 log_info "Network bridge: $BRIDGE"
 
-if [ -n "${TAILSCALE_LAN_CIDR:-}" ]; then
-    LAN_CIDR="$TAILSCALE_LAN_CIDR"
-else
-    LAN_CIDR=$(detect_lan_cidr "$BRIDGE" || true)
-    if [ -z "$LAN_CIDR" ]; then
-        log_error "Could not determine the LAN CIDR on $BRIDGE."
-        log_error "Re-run with an explicit value: TAILSCALE_LAN_CIDR='192.168.15.0/24' bash tailscale/install.sh"
-        exit 1
-    fi
-fi
-if ! validate_ipv4_cidr "$LAN_CIDR"; then
-    log_error "Invalid LAN CIDR '$LAN_CIDR' (expected e.g. 192.168.15.0/24)."
-    exit 1
-fi
-if [ "$LAN_CIDR" = "0.0.0.0/0" ]; then
-    log_error "Refusing to advertise 0.0.0.0/0: this router is a LAN subnet router, not an exit node."
-    exit 1
-fi
+LAN_CIDR=$(tailscale_resolve_lan_cidr "bash tailscale/install.sh") || exit 1
 log_info "LAN CIDR to advertise: $LAN_CIDR"
 
-# --- 1. Find (counting duplicates) or create the dedicated router ---
-mapfile -t ROUTER_IDS < <(pct list 2>/dev/null | awk -v target="$ROUTER_NAME" 'NR > 1 && $NF == target { print $1 }' || true)
-if [ "${#ROUTER_IDS[@]}" -gt 1 ]; then
-    log_error "Multiple containers named '$ROUTER_NAME' exist (${ROUTER_IDS[*]})."
+# --- 1. Find (exact, duplicates are fatal) or create the dedicated router ---
+container_id=""
+resolve_rc=0
+container_id=$(get_exact_container_id_by_name "$ROUTER_NAME" 2>/dev/null) || resolve_rc=$?
+if [ "$resolve_rc" -eq 2 ]; then
+    log_error "Multiple containers named '$ROUTER_NAME' exist."
     log_error "Remove or rename the duplicates before re-running — refusing to create another one."
     exit 1
-fi
-
-container_id=""
-if [ "${#ROUTER_IDS[@]}" -eq 1 ] && [ -n "${ROUTER_IDS[0]}" ]; then
-    container_id="${ROUTER_IDS[0]}"
 fi
 
 # A fresh router can never be logged in, so require the key before creating anything.
@@ -101,45 +76,12 @@ log_step "Installing Tailscale inside container $container_id..."
 pct exec "$container_id" -- bash -c 'curl -fsSL --proto "=https" --tlsv1.2 -o /tmp/tailscale-install.sh https://tailscale.com/install.sh && sh /tmp/tailscale-install.sh'
 pct exec "$container_id" -- systemctl enable --now tailscaled
 
-# --- 4. Log in only when needed; the key is read from a pushed file, never argv ---
-if pct exec "$container_id" -- tailscale status >/dev/null 2>&1; then
-    log_info "Router already logged in — skipping 'tailscale up'."
-    if [ -n "${TAILSCALE_AUTHKEY:-}" ]; then
-        log_warning "TAILSCALE_AUTHKEY is set but unused (already logged in)."
-        log_warning "To rotate identity, run 'pct exec $container_id -- tailscale logout' first."
-    fi
-    log_warning "Confirm the tailnet identity before approving routes: pct exec $container_id -- tailscale status"
-else
-    if [ -z "${TAILSCALE_AUTHKEY:-}" ]; then
-        log_error "Router is not on the tailnet and TAILSCALE_AUTHKEY is not set."
-        log_error "Create an auth key in the admin console (reusable, tagged, short expiry) and re-run:"
-        log_error "  TAILSCALE_AUTHKEY='tskey-...' bash tailscale/install.sh"
-        exit 1
-    fi
-    log_step "Logging the router into the tailnet (auth key via pushed file, never argv)..."
-    key_file=$(mktemp)
-    chmod 600 "$key_file"
-    # shellcheck disable=SC2064
-    trap "rm -f '$key_file'" EXIT
-    printf '%s' "$TAILSCALE_AUTHKEY" > "$key_file"
-    pct push "$container_id" "$key_file" /tmp/ts-authkey
-    if ! pct exec "$container_id" -- tailscale up --auth-key=file:/tmp/ts-authkey --advertise-routes="$LAN_CIDR" --accept-dns=false; then
-        log_error "tailscale up failed — check the key and re-run"
-        pct exec "$container_id" -- rm -f /tmp/ts-authkey 2>/dev/null || true
-        rm -f "$key_file"
-        trap - EXIT
-        exit 1
-    fi
-    pct exec "$container_id" -- rm -f /tmp/ts-authkey
-    rm -f "$key_file"
-    trap - EXIT
-fi
-log_step "Asserting advertised routes ($LAN_CIDR)..."
-pct exec "$container_id" -- tailscale set --advertise-routes="$LAN_CIDR"
+# --- 4. Log in (only when needed) and assert routes ---
+tailscale_login_with_key "$container_id" "$LAN_CIDR" || exit 1
+tailscale_set_routes "$container_id" "$LAN_CIDR" || exit 1
 
 # --- 5. Verify ---
-pct exec "$container_id" -- tailscale status >/dev/null 2>&1 \
-    || { log_error "tailscale status failed — router is not on the tailnet"; exit 1; }
+tailscale_verify_online "$container_id" || exit 1
 router_lan_ip=$(get_container_ip "$container_id")
 log_success "Tailscale router ready (container $container_id, LAN IP: ${router_lan_ip:-unknown}, routes: $LAN_CIDR)."
 
@@ -159,5 +101,5 @@ log_info "  3. On your devices: install Tailscale with the same identity; run 't
 log_info "  4. From off-LAN with VPN on: ping a LAN IP, then open the usual $DNS_ZONE URLs (fail-closed with VPN off)."
 echo ""
 log_warning "Caddy: '$ROUTER_NAME' carries the 'no-auto-proxy' tag — skip it when running caddy/generate-caddyfile.sh."
-log_info "A re-run restarts the router briefly when TUN/forwarding converge; plan accordingly."
+log_info "A re-run restarts the router briefly whenever TUN/forwarding converge; plan accordingly."
 log_info "Colleague access stays manual for now: no grants are created by this script (deny by default)."

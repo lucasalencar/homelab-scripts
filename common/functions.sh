@@ -527,6 +527,7 @@ get_container_id_by_name() {
 # Returns the container ID by its exact name (case-sensitive).
 # Unlike get_container_id_by_name (partial, case-insensitive), fails when
 # zero or multiple containers match exactly — never guesses between them.
+# Exit code distinguishes the cases: 1 = no match, 2 = multiple matches.
 # Usage: get_exact_container_id_by_name "starr" || exit 1
 get_exact_container_id_by_name() {
     local name="${1:-}"
@@ -540,7 +541,7 @@ get_exact_container_id_by_name() {
     fi
     if [ "$(printf '%s\n' "$ids" | wc -l | tr -d ' ')" -ne 1 ]; then
         log_error "Multiple containers have the exact name '$name'; refusing to choose one."
-        return 1
+        return 2
     fi
     printf '%s\n' "$ids"
 }
@@ -677,6 +678,7 @@ validate_ipv4_cidr() {
     [ "${#parts[@]}" -eq 4 ] || return 1
     for octet in "${parts[@]}"; do
         [[ "$octet" =~ ^[0-9]+$ ]] && [ "$octet" -ge 0 ] && [ "$octet" -le 255 ] || return 1
+        [[ "$octet" =~ ^0[0-9]+$ ]] && return 1
         count=$((count + 1))
     done
     [ "$count" -eq 4 ]

@@ -52,6 +52,9 @@ manually in the admin console, never by these scripts.
 ## Notes
 
 - Both scripts fail fast without `/dev/net/tun` on the host.
+- The scripts own the advertised route set exclusively: `tailscale set`
+  replaces it, so extra manual routes are removed on the next run by design
+  (single-subnet router).
 - A re-run restarts the router briefly whenever TUN/forwarding converge;
   plan re-runs accordingly.
 - When already logged in, `install.sh` skips `tailscale up` and only
