@@ -261,7 +261,7 @@ cat "$TMP_CADDYFILE" > "$LOCAL_CADDYFILE"
 cat "$LOCAL_CADDYFILE"
 
 # --- Push to Caddy container and reload ---
-"$SCRIPT_DIR/push-caddyfile.sh"
+"$SCRIPT_DIR/push-caddyfile.sh" --file "$LOCAL_CADDYFILE"
 
 echo ""
 log_success "Caddy reloaded with latest configuration."
