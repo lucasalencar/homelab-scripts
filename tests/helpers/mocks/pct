@@ -136,12 +136,18 @@ EOF
       exit 0
     fi
 
+    # Models login state: MOCK_TAILSCALE_LOGGED_IN is the INITIAL state only —
+    # a successful `tailscale up` in the same MOCK_TMPDIR flips it to logged
+    # in (sentinel file below), like the real daemon.
     if [[ "$*" == *"tailscale up"* ]]; then
-      if [ -n "${MOCK_TMPDIR:-}" ]; then
-        touch "$MOCK_TMPDIR/tailscale-up-ok" 2>/dev/null || true
+      if [ "${MOCK_TAILSCALE_UP_FAIL:-0}" = "1" ]; then
+        exit 1
       fi
       if [ "${MOCK_PCT_EXEC_FAIL:-0}" = "1" ]; then
         exit 1
+      fi
+      if [ -n "${MOCK_TMPDIR:-}" ]; then
+        touch "$MOCK_TMPDIR/tailscale-up-ok" 2>/dev/null || true
       fi
       exit 0
     fi

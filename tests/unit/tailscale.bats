@@ -10,6 +10,9 @@ setup() {
   export TAILSCALE_LXC_CONF_DIR="$MOCK_TMPDIR/lxc"
   unset TAILSCALE_AUTHKEY
   unset TAILSCALE_LAN_CIDR
+  unset TAILSCALE_ROUTER_NAME
+  unset TAILSCALE_DNS_IP
+  unset TAILSCALE_DNS_ZONE
 }
 
 teardown() {
@@ -21,7 +24,8 @@ teardown() {
 # tailscale/install.sh — auth key handling
 # -------------------------------------------------------------------
 
-@test "tailscale install fails fast without an auth key and creates nothing" {
+@test "tailscale install fails fast without an auth key when not logged in" {
+  export MOCK_TAILSCALE_LOGGED_IN="0"
   export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n100        running                 caddy'
 
   run bash "$REPO_ROOT/tailscale/install.sh"
@@ -30,14 +34,85 @@ teardown() {
   ! grep -q "pct create" "$MOCK_LOG"
 }
 
-@test "tailscale install rejects an invalid LAN CIDR" {
+@test "tailscale install skips login when already logged in" {
   export TAILSCALE_AUTHKEY="tskey-test-123"
-  export TAILSCALE_LAN_CIDR="not-a-cidr"
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n100        running                 caddy\n110        running                 tailscale-router'
+  export MOCK_PCT_CONFIG_110="hostname: tailscale-router"
+
+  run bash "$REPO_ROOT/tailscale/install.sh"
+  [ "$status" -eq 0 ]
+  ! grep -q "tailscale up" "$MOCK_LOG"
+  grep -q "tailscale set --advertise-routes=" "$MOCK_LOG"
+}
+
+@test "tailscale install warns when a key is provided but unused" {
+  export TAILSCALE_AUTHKEY="tskey-test-123"
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n100        running                 caddy\n110        running                 tailscale-router'
+  export MOCK_PCT_CONFIG_110="hostname: tailscale-router"
+
+  run bash "$REPO_ROOT/tailscale/install.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"unused"* ]]
+}
+
+@test "tailscale install rejects invalid LAN CIDRs" {
+  export TAILSCALE_AUTHKEY="tskey-test-123"
+  export MOCK_TAILSCALE_LOGGED_IN="0"
   export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n100        running                 caddy'
+
+  for bad in "not-a-cidr" "999.999.0.0/24" "192.168.1.0/33" "0.0.0.0/0" "192.168.1.1"; do
+    export TAILSCALE_LAN_CIDR="$bad"
+    run bash "$REPO_ROOT/tailscale/install.sh"
+    [ "$status" -ne 0 ]
+  done
+}
+
+@test "tailscale install fails when the LAN CIDR is undetectable" {
+  export TAILSCALE_AUTHKEY="tskey-test-123"
+  export MOCK_TAILSCALE_LOGGED_IN="0"
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n100        running                 caddy'
+  export MOCK_IP_ROUTE_OUTPUT=""
 
   run bash "$REPO_ROOT/tailscale/install.sh"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"CIDR"* ]]
+  [[ "$output" == *"TAILSCALE_LAN_CIDR"* ]]
+  ! grep -q "pct create" "$MOCK_LOG"
+}
+
+@test "tailscale install fails on ambiguous routes instead of guessing" {
+  export TAILSCALE_AUTHKEY="tskey-test-123"
+  export MOCK_TAILSCALE_LOGGED_IN="0"
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n100        running                 caddy'
+  export MOCK_IP_ROUTE_OUTPUT=$'192.168.15.0/24 dev vmbr0 proto kernel scope link src 192.168.15.5\n10.42.0.0/24 dev vmbr0 proto kernel scope link src 10.42.0.5'
+
+  run bash "$REPO_ROOT/tailscale/install.sh"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"explicit"* ]]
+}
+
+@test "tailscale install fails on duplicate router names instead of cloning" {
+  export TAILSCALE_AUTHKEY="tskey-test-123"
+  export MOCK_TAILSCALE_LOGGED_IN="0"
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n100        running                 caddy\n110        running                 tailscale-router\n111        running                 tailscale-router'
+
+  run bash "$REPO_ROOT/tailscale/install.sh"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Multiple"* ]]
+  ! grep -q "pct create" "$MOCK_LOG"
+}
+
+@test "tailscale install fails cleanly when tailscale up fails" {
+  export TAILSCALE_AUTHKEY="tskey-super-secret-xyz-999"
+  export MOCK_TAILSCALE_LOGGED_IN="0"
+  export MOCK_TAILSCALE_UP_FAIL="1"
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n100        running                 caddy'
+  export MOCK_PCT_CONFIG_110="hostname: tailscale-router"
+
+  run bash "$REPO_ROOT/tailscale/install.sh"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"tailscale up failed"* ]]
+  ! grep -q "tskey-super-secret-xyz-999" "$MOCK_LOG"
+  ! grep -q "tskey-super-secret-xyz-999" <<< "$output"
 }
 
 # -------------------------------------------------------------------
@@ -55,7 +130,7 @@ teardown() {
   grep -q "pct create 110" "$MOCK_LOG"
   grep -q "tailscale-router" "$MOCK_LOG"
   grep -q "no-auto-proxy" "$MOCK_LOG"
-  grep -q "advertise-routes" "$MOCK_LOG"
+  grep -q "tailscale up --auth-key=file:/tmp/ts-authkey" "$MOCK_LOG"
   [[ "$output" == *"tailscale-router"* ]]
 }
 
@@ -68,7 +143,7 @@ teardown() {
 
   run bash "$REPO_ROOT/tailscale/install.sh"
   [ "$status" -eq 0 ]
-  grep -q "192.168.42.0/24" "$MOCK_LOG"
+  grep -q "tailscale set --advertise-routes=192.168.42.0/24" "$MOCK_LOG"
 }
 
 @test "tailscale install never logs the auth key" {
@@ -92,7 +167,7 @@ teardown() {
   [ "$status" -eq 0 ]
   ! grep -q "pct create" "$MOCK_LOG"
   grep -q "pct exec 110" "$MOCK_LOG"
-  [[ "$output" == *"eus"* ]] || [[ "$output" == *"reusing"* ]] || [[ "$output" == *"110"* ]]
+  [[ "$output" == *"reusing"* ]]
 }
 
 @test "tailscale install ensures TUN passthrough idempotently" {
@@ -132,7 +207,32 @@ teardown() {
   run bash "$REPO_ROOT/tailscale/update.sh"
   [ "$status" -eq 0 ]
   grep -q "pct exec 110" "$MOCK_LOG"
-  grep -q "tailscale" "$MOCK_LOG"
+  grep -q "tailscale set --advertise-routes=" "$MOCK_LOG"
+}
+
+@test "tailscale update fails when the LAN CIDR is undetectable" {
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n100        running                 caddy\n110        running                 tailscale-router'
+  export MOCK_PCT_CONFIG_110="hostname: tailscale-router"
+  export MOCK_IP_ROUTE_OUTPUT=""
+
+  run bash "$REPO_ROOT/tailscale/update.sh"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"TAILSCALE_LAN_CIDR"* ]]
+}
+
+# -------------------------------------------------------------------
+# validate_ipv4_cidr (common/functions.sh)
+# -------------------------------------------------------------------
+
+@test "validate_ipv4_cidr accepts valid and rejects invalid CIDRs" {
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; validate_ipv4_cidr "192.168.15.0/24"'
+  [ "$status" -eq 0 ]
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; validate_ipv4_cidr "10.0.0.0/8"'
+  [ "$status" -eq 0 ]
+  for bad in "" "not-a-cidr" "999.999.0.0/24" "192.168.1.0/33" "192.168.1.1" "192.168.1.0/" "/24"; do
+    run bash -c 'source "$REPO_ROOT/common/functions.sh"; validate_ipv4_cidr "$0"' "$bad"
+    [ "$status" -ne 0 ]
+  done
 }
 
 # -------------------------------------------------------------------
@@ -144,4 +244,5 @@ teardown() {
   grep -q "no-auto-proxy" "$REPO_ROOT/tailscale/README.md"
   grep -q "generate-caddyfile" "$REPO_ROOT/tailscale/README.md"
   grep -q "approve" "$REPO_ROOT/tailscale/README.md"
+  grep -q "TAILSCALE_ROUTER_NAME" "$REPO_ROOT/tailscale/README.md"
 }
