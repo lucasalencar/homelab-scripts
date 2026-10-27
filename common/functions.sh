@@ -662,6 +662,55 @@ detect_pve_bridge() {
     fi
 }
 
+# Validates a dotted-decimal IPv4 CIDR (each octet 0-255, prefix 0-32).
+# Usage: validate_ipv4_cidr "192.168.15.0/24" || exit 1
+validate_ipv4_cidr() {
+    local cidr="${1:-}"
+    local addr="${cidr%/*}"
+    local prefix="${cidr#*/}"
+    [ -n "$addr" ] && [ "$addr" != "$cidr" ] || return 1
+    [[ "$prefix" =~ ^[0-9]+$ ]] && [ "$prefix" -ge 0 ] && [ "$prefix" -le 32 ] || return 1
+    local octet
+    local count=0
+    local IFS='.'
+    read -ra parts <<< "$addr" || return 1
+    [ "${#parts[@]}" -eq 4 ] || return 1
+    for octet in "${parts[@]}"; do
+        [[ "$octet" =~ ^[0-9]+$ ]] && [ "$octet" -ge 0 ] && [ "$octet" -le 255 ] || return 1
+        count=$((count + 1))
+    done
+    [ "$count" -eq 4 ]
+}
+
+# Prints the LAN CIDR for a bridge when exactly one connected route exists.
+# Fails with no output when zero match, and with an error when several match
+# (caller must then require an explicit CIDR instead of guessing).
+# Usage: cidr=$(detect_lan_cidr "vmbr0") || exit 1
+detect_lan_cidr() {
+    local bridge="${1:-}"
+    if [ -z "$bridge" ]; then
+        log_error "detect_lan_cidr: missing bridge"
+        return 1
+    fi
+    local routes
+    routes=$(ip -o route show dev "$bridge" scope link 2>/dev/null | awk '{print $1}' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/[0-9]+$' | sort -u || true)
+    if [ -z "$routes" ]; then
+        return 1
+    fi
+    local count
+    count=$(printf '%s\n' "$routes" | grep -c . || true)
+    if [ "$count" -gt 1 ]; then
+        log_error "Multiple connected routes on $bridge: $(printf '%s' "$routes" | tr '\n' ' ')"
+        log_error "Refusing to guess — re-run with an explicit CIDR."
+        return 1
+    fi
+    if ! validate_ipv4_cidr "$routes"; then
+        log_error "Detected route '$routes' is not a valid IPv4 CIDR."
+        return 1
+    fi
+    printf '%s\n' "$routes"
+}
+
 # Returns the next available CTID from Proxmox
 # Usage: ctid=$(get_pve_next_id) || exit 1
 get_pve_next_id() {
