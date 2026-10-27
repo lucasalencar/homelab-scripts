@@ -263,6 +263,50 @@ EOF
   [ "$status" -eq 0 ]
 }
 
+@test "caddy generate list prints state entries" {
+  cat > "$TEST_STATE_JSON" <<'EOF'
+{"version": 1, "domain": "marx.home", "entries": {
+  "jellyfin": {"ip": "10.0.0.7", "port": 8096, "tls": "http", "source": "auto", "guest": "jellyfin"},
+  "sonarr": {"ip": "10.0.0.5", "port": 8989, "tls": "http", "source": "auto", "guest": "starr"}
+}}
+EOF
+  run bash "$REPO_ROOT/caddy/generate-caddyfile.sh" list 2>&1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"jellyfin.marx.home -> 10.0.0.7:8096 (http)"* ]]
+  [[ "$output" == *"sonarr.marx.home -> 10.0.0.5:8989 (http)"* ]]
+}
+
+@test "caddy generate remove drops the entry and keeps the rest" {
+  cat > "$TEST_STATE_JSON" <<'EOF'
+{"version": 1, "domain": "marx.home", "entries": {
+  "jellyfin": {"ip": "10.0.0.7", "port": 8096, "tls": "http", "source": "auto", "guest": "jellyfin"},
+  "test-vm": {"ip": "10.0.0.10", "port": 80, "tls": "http", "source": "auto", "guest": null}
+}}
+EOF
+  run bash "$REPO_ROOT/caddy/generate-caddyfile.sh" remove test-vm 2>&1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Removed test-vm"* ]]
+  /usr/bin/grep -q "jellyfin" "$TEST_STATE_JSON"
+  ! /usr/bin/grep -q "test-vm" "$TEST_STATE_JSON"
+}
+
+@test "caddy generate remove without a name fails with usage" {
+  run bash "$REPO_ROOT/caddy/generate-caddyfile.sh" remove 2>&1
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Usage"* ]]
+}
+
+@test "caddy generate remove of an unknown entry fails" {
+  cat > "$TEST_STATE_JSON" <<'EOF'
+{"version": 1, "domain": "marx.home", "entries": {
+  "jellyfin": {"ip": "10.0.0.7", "port": 8096, "tls": "http", "source": "auto", "guest": "jellyfin"}
+}}
+EOF
+  run bash "$REPO_ROOT/caddy/generate-caddyfile.sh" remove ghost 2>&1
+  [ "$status" -ne 0 ]
+  /usr/bin/grep -q "jellyfin" "$TEST_STATE_JSON"
+}
+
 # -------------------------------------------------------------------
 # caddy/generate-caddyfile.sh — step-by-step visibility
 # -------------------------------------------------------------------

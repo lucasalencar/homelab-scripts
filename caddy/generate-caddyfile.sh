@@ -14,6 +14,47 @@ CADDY_CONTAINER_NAME="caddy"
 DOMAIN="marx.home"
 CORE_SCRIPT="$SCRIPT_DIR/generate_caddyfile_core.py"
 
+# Locates a real python3, skipping the bats mock bin
+resolve_real_python3() {
+    local found candidate
+    found=$(command -v python3 2>/dev/null || true)
+    case "$found" in
+        ""|*mocks*) ;;
+        *)
+            printf '%s\n' "$found"
+            return 0
+            ;;
+    esac
+    for candidate in /opt/homebrew/bin/python3 /usr/bin/python3 /usr/local/bin/python3; do
+        if [ -x "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# --- State helpers (no guest probing needed) ---
+if [ "${1:-}" = "list" ]; then
+    REAL_PYTHON3=$(resolve_real_python3 || true)
+    if [ -z "$REAL_PYTHON3" ]; then
+        log_error "python3 not found. Install Python 3 to run $CORE_SCRIPT."
+        exit 1
+    fi
+    exec "$REAL_PYTHON3" "$CORE_SCRIPT" list --state "$STATE_FILE"
+elif [ "${1:-}" = "remove" ]; then
+    if [ -z "${2:-}" ]; then
+        log_error "Usage: bash caddy/generate-caddyfile.sh remove <name>"
+        exit 1
+    fi
+    REAL_PYTHON3=$(resolve_real_python3 || true)
+    if [ -z "$REAL_PYTHON3" ]; then
+        log_error "python3 not found. Install Python 3 to run $CORE_SCRIPT."
+        exit 1
+    fi
+    exec "$REAL_PYTHON3" "$CORE_SCRIPT" remove --state "$STATE_FILE" --name "$2"
+fi
+
 # Seconds allowed per guest-agent probe; a dead agent fails fast instead of
 # hanging the run silently. Override with CADDY_GUEST_TIMEOUT for slow hosts.
 GUEST_PROBE_TIMEOUT="${CADDY_GUEST_TIMEOUT:-30}"
@@ -175,25 +216,6 @@ detect_ports() {
     fi
 }
 
-# Locates a real python3, skipping the bats mock bin
-resolve_real_python3() {
-    local found candidate
-    found=$(command -v python3 2>/dev/null || true)
-    case "$found" in
-        ""|*mocks*) ;;
-        *)
-            printf '%s\n' "$found"
-            return 0
-            ;;
-    esac
-    for candidate in /opt/homebrew/bin/python3 /usr/bin/python3 /usr/local/bin/python3; do
-        if [ -x "$candidate" ]; then
-            printf '%s\n' "$candidate"
-            return 0
-        fi
-    done
-    return 1
-}
 
 # --- Describe guests (with listening ports) for the Python core ---
 if ! command -v jq >/dev/null 2>&1; then
