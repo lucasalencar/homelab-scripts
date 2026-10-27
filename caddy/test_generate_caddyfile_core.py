@@ -706,5 +706,82 @@ class MainTests(unittest.TestCase):
         self.assertIn("Error", stderr.getvalue())
 
 
+class RemoveTests(unittest.TestCase):
+    def write_state_file(self, state):
+        handle = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+        json.dump(state, handle)
+        handle.close()
+        self.addCleanup(os.unlink, handle.name)
+        return handle.name
+
+    def run_remove(self, args):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            status = core.main(args)
+        return status, stdout.getvalue(), stderr.getvalue()
+
+    def remove_argv(self, state_path, name):
+        return ["remove", "--state", state_path, "--name", name]
+
+    def test_remove_drops_entry_and_keeps_rest(self):
+        path = self.write_state_file(
+            make_state(
+                {
+                    "jellyfin": make_entry("10.0.0.7", 8096, guest="jellyfin"),
+                    "test-vm": make_entry("10.0.0.10", 80, guest=None),
+                }
+            )
+        )
+        status, out, _ = self.run_remove(self.remove_argv(path, "test-vm"))
+        self.assertEqual(status, 0)
+        self.assertIn("test-vm", out)
+        self.assertEqual(sorted(core.load_state(path)["entries"]), ["jellyfin"])
+
+    def test_remove_missing_entry_fails_without_touching_file(self):
+        path = self.write_state_file(
+            make_state({"jellyfin": make_entry("10.0.0.7", 8096, guest="jellyfin")})
+        )
+        with open(path, encoding="utf-8") as handle:
+            before = handle.read()
+        status, _, err = self.run_remove(self.remove_argv(path, "ghost"))
+        self.assertEqual(status, 1)
+        self.assertIn("ghost", err)
+        with open(path, encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), before)
+
+    def test_remove_missing_file_fails(self):
+        status, _, err = self.run_remove(
+            self.remove_argv("/nonexistent/state.json", "test-vm")
+        )
+        self.assertEqual(status, 1)
+        self.assertIn("Error", err)
+
+    def test_sync_orphan_warning_points_at_remove(self):
+        handle = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+        json.dump([], handle)
+        handle.close()
+        self.addCleanup(os.unlink, handle.name)
+        state_path = self.write_state_file(
+            make_state({"oldbox": make_entry("10.9.9.9", 80, guest=None)})
+        )
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            status = core.main(
+                [
+                    "sync",
+                    "--domain",
+                    DOMAIN,
+                    "--state",
+                    state_path,
+                    "--guests-file",
+                    handle.name,
+                ]
+            )
+        self.assertEqual(status, 0)
+        self.assertIn("oldbox", stderr.getvalue())
+        self.assertIn("remove", stderr.getvalue())
+        self.assertIn(state_path, stderr.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

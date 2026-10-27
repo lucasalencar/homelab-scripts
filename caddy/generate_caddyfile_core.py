@@ -39,6 +39,7 @@ __all__ = [
     "render_block",
     "render_state",
     "read_prompt",
+    "remove_entry",
     "main",
 ]
 
@@ -351,6 +352,13 @@ def load_guests(path: str) -> List[Guest]:
     ]
 
 
+def remove_entry(state: Dict[str, Any], name: str) -> Dict[str, Any]:
+    entries = state["entries"]
+    if name not in entries:
+        raise KeyError(name)
+    return entries.pop(name)
+
+
 def cmd_sync(args: argparse.Namespace) -> int:
     def log(line: str) -> None:
         print(line, file=sys.stderr)
@@ -377,11 +385,45 @@ def cmd_sync(args: argparse.Namespace) -> int:
     _, warnings = render_state(state, args.domain, touched)
     for warning in warnings:
         log(warning)
+    if warnings:
+        log(
+            "  Drop a stale entry with: %s remove --state %s --name <entry>"
+            % (sys.argv[0], args.state)
+        )
     try:
         save_state(state, args.state)
     except OSError as exc:
         print("Error: cannot save state file: %s" % (exc,), file=sys.stderr)
         return 1
+    return 0
+
+
+def cmd_remove(args: argparse.Namespace) -> int:
+    try:
+        state = load_state(args.state)
+    except FileNotFoundError:
+        print("Error: state file not found: %s" % (args.state,), file=sys.stderr)
+        return 1
+    except (OSError, ValueError) as exc:
+        print("Error: cannot load state file: %s" % (exc,), file=sys.stderr)
+        return 1
+    try:
+        removed = remove_entry(state, args.name)
+    except KeyError:
+        print(
+            "Error: no such entry: %s (state file unchanged)" % (args.name,),
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        save_state(state, args.state)
+    except OSError as exc:
+        print("Error: cannot save state file: %s" % (exc,), file=sys.stderr)
+        return 1
+    print(
+        "Removed %s (%s:%s)"
+        % (args.name, removed.get("ip"), removed.get("port"))
+    )
     return 0
 
 
@@ -405,6 +447,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     sync_parser.add_argument("--state", required=True)
     sync_parser.add_argument("--guests-file", required=True)
     sync_parser.set_defaults(func=cmd_sync)
+    remove_parser = sub.add_parser("remove", help="drop one entry from state")
+    remove_parser.add_argument("--state", required=True)
+    remove_parser.add_argument("--name", required=True)
+    remove_parser.set_defaults(func=cmd_remove)
     render_parser = sub.add_parser("render", help="render Caddyfile")
     render_parser.add_argument("--state", required=True)
     render_parser.set_defaults(func=cmd_render)
