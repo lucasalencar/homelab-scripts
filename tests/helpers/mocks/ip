@@ -11,4 +11,13 @@ if [[ "$*" == *"link show"* ]]; then
   fi
   exit 0
 fi
+
+if [[ "$*" == *"route show"* ]]; then
+  if [ -n "${MOCK_IP_ROUTE_OUTPUT+set}" ]; then
+    echo -e "$MOCK_IP_ROUTE_OUTPUT"
+  else
+    echo "192.168.15.0/24 dev vmbr0 proto kernel scope link src 192.168.15.5"
+  fi
+  exit 0
+fi
 exit 0
