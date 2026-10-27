@@ -136,6 +136,25 @@ EOF
       exit 0
     fi
 
+    if [[ "$*" == *"tailscale up"* ]]; then
+      if [ -n "${MOCK_TMPDIR:-}" ]; then
+        touch "$MOCK_TMPDIR/tailscale-up-ok" 2>/dev/null || true
+      fi
+      if [ "${MOCK_PCT_EXEC_FAIL:-0}" = "1" ]; then
+        exit 1
+      fi
+      exit 0
+    fi
+
+    if [[ "$*" == *"tailscale status"* ]]; then
+      if [ "${MOCK_TAILSCALE_LOGGED_IN:-1}" = "0" ] \
+        && { [ -z "${MOCK_TMPDIR:-}" ] || [ ! -f "$MOCK_TMPDIR/tailscale-up-ok" ]; }; then
+        exit 1
+      fi
+      echo "100.64.0.1 tailscale-router linux active"
+      exit 0
+    fi
+
     if [ -n "${MOCK_PCT_EXEC_OUTPUT:-}" ]; then
       echo -e "$MOCK_PCT_EXEC_OUTPUT"
     fi
