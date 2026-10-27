@@ -783,5 +783,51 @@ class RemoveTests(unittest.TestCase):
         self.assertIn(state_path, stderr.getvalue())
 
 
+class ListTests(unittest.TestCase):
+    def write_state_file(self, state):
+        handle = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+        json.dump(state, handle)
+        handle.close()
+        self.addCleanup(os.unlink, handle.name)
+        return handle.name
+
+    def run_list(self, state_path):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            status = core.main(["list", "--state", state_path])
+        return status, stdout.getvalue(), stderr.getvalue()
+
+    def test_list_prints_entries_sorted_with_targets(self):
+        path = self.write_state_file(
+            make_state(
+                {
+                    "sonarr": make_entry("10.0.0.5", 8989, guest="starr"),
+                    "jellyfin": make_entry("10.0.0.7", 8096, guest="jellyfin"),
+                }
+            )
+        )
+        status, out, _ = self.run_list(path)
+        self.assertEqual(status, 0)
+        lines = out.strip().split("\n")
+        self.assertEqual(
+            lines,
+            [
+                "jellyfin.marx.home -> 10.0.0.7:8096 (http)",
+                "sonarr.marx.home -> 10.0.0.5:8989 (http)",
+            ],
+        )
+
+    def test_list_empty_state_reports_no_entries(self):
+        path = self.write_state_file(core.empty_state(DOMAIN))
+        status, out, _ = self.run_list(path)
+        self.assertEqual(status, 0)
+        self.assertIn("no entries", out)
+
+    def test_list_missing_file_fails(self):
+        status, _, err = self.run_list("/nonexistent/state.json")
+        self.assertEqual(status, 1)
+        self.assertIn("Error", err)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

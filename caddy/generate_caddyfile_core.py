@@ -427,6 +427,30 @@ def cmd_remove(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_list(args: argparse.Namespace) -> int:
+    try:
+        state = load_state(args.state)
+    except FileNotFoundError:
+        print("Error: state file not found: %s" % (args.state,), file=sys.stderr)
+        return 1
+    except (OSError, ValueError) as exc:
+        print("Error: cannot load state file: %s" % (exc,), file=sys.stderr)
+        return 1
+    domain = state.get("domain") or "marx.home"
+    entries = state["entries"]
+    if not entries:
+        print("(no entries)")
+        return 0
+    for name in sorted(entries):
+        entry = entries[name]
+        print(
+            "%s.%s -> %s:%s (%s)"
+            % (name, domain, entry.get("ip"), entry.get("port"),
+               entry.get("tls"))
+        )
+    return 0
+
+
 def cmd_render(args: argparse.Namespace) -> int:
     try:
         state = load_state(args.state)
@@ -451,6 +475,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     remove_parser.add_argument("--state", required=True)
     remove_parser.add_argument("--name", required=True)
     remove_parser.set_defaults(func=cmd_remove)
+    list_parser = sub.add_parser("list", help="list entries in state")
+    list_parser.add_argument("--state", required=True)
+    list_parser.set_defaults(func=cmd_list)
     render_parser = sub.add_parser("render", help="render Caddyfile")
     render_parser.add_argument("--state", required=True)
     render_parser.set_defaults(func=cmd_render)
