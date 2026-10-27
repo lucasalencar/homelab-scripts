@@ -200,6 +200,42 @@ class MergeTests(unittest.TestCase):
         )
         self.assertIn("http://jellyfin.marx.home {", text)
 
+    def test_new_guest_logs_header_with_ports_before_decisions(self):
+        _, logs, _, _, _ = merge(
+            [make_guest("starr", "192.168.31.149", [22, 5055, 6767],
+                        gid="107")],
+            answers=["n", "", "n"],
+        )
+        header = [line for line in logs
+                  if "starr" in line and "192.168.31.149" in line]
+        self.assertTrue(header, "expected a guest header in logs: %r" % (logs,))
+        joined = "\n".join(logs)
+        for token in ("22", "5055", "6767", "107"):
+            self.assertIn(token, joined)
+
+    def test_multi_service_question_shows_port_count(self):
+        asker, _, _, _, _ = merge(
+            [make_guest("starr", "192.168.31.149", [5055, 6767], gid="107")],
+            answers=["n", "", "n"],
+        )
+        self.assertIn("2 ports", asker.prompts[0])
+
+    def test_per_port_prompts_show_progress(self):
+        asker, _, _, _, _ = merge(
+            [make_guest("starr", "192.168.31.149", [5055, 6767], gid="107")],
+            answers=["y", "a", "n", "b", "n"],
+        )
+        self.assertIn("[1/2]", asker.prompts[1])
+        self.assertIn("[2/2]", asker.prompts[3])
+
+    def test_single_service_prompt_lists_detected_ports(self):
+        asker, _, _, _, _ = merge(
+            [make_guest("jellyfin", "10.0.0.7", [22, 8096], gid="107")],
+            answers=["n", "", "n"],
+        )
+        self.assertIn("22", asker.prompts[1])
+        self.assertIn("8096", asker.prompts[1])
+
     def test_known_guest_reused_without_prompting(self):
         state = make_state(
             {"jellyfin": make_entry("10.0.0.7", 8096, guest="jellyfin")}

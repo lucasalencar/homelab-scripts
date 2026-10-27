@@ -136,6 +136,23 @@ def sanitize_subdomain(raw: str) -> str:
     return "".join(raw.split()).split(".", 1)[0]
 
 
+def describe_ports(ports: List[int]) -> str:
+    if not ports:
+        return "none detected"
+    return " ".join(str(port) for port in ports)
+
+
+def log_guest_header(
+    guest: Guest, ports: List[int], log: Callable[[str], None]
+) -> None:
+    log("")
+    log(
+        "-- %s [%s %s] (%s)"
+        % (guest.name, guest.gtype, guest.gid, guest.ip)
+    )
+    log("   listening: %s" % describe_ports(ports))
+
+
 def prompt_tls(
     name: str,
     current: Optional[str],
@@ -216,27 +233,31 @@ def merge_guests(
             reuse_known(name, ip)
             continue
         ports = list(guest.ports)
+        log_guest_header(guest, ports, log)
         multi = False
         if len(ports) > 1:
             answer = ask(
-                "  Does %s host multiple services (one subdomain per port)? [y/N]: "
-                % name
+                "  Does %s host multiple services "
+                "(%d ports, one subdomain per port)? [y/N]: "
+                % (name, len(ports))
             ).strip().lower()
             multi = answer in ("y", "yes")
         if multi:
             added_here: List[str] = []
-            for port in ports:
+            total = len(ports)
+            for index, port in enumerate(ports, 1):
+                progress = "[%d/%d]" % (index, total)
                 suggestion = suggest_subdomain(entries, port, claimed)
                 if suggestion:
                     raw = ask(
-                        "  Subdomain for %s port %d (%s) [default: %s]: "
-                        % (name, port, ip, suggestion)
+                        "  Subdomain for %s port %d (%s) %s [default: %s]: "
+                        % (name, port, ip, progress, suggestion)
                     )
                     raw = raw.strip() or suggestion
                 else:
                     raw = ask(
-                        "  Subdomain for %s port %d (%s) [empty to skip]: "
-                        % (name, port, ip)
+                        "  Subdomain for %s port %d (%s) %s [empty to skip]: "
+                        % (name, port, ip, progress)
                     )
                 svc = sanitize_subdomain(raw)
                 if not svc:
@@ -259,7 +280,8 @@ def merge_guests(
                 continue
         suggested = suggest_port(ports)
         raw_port = ask(
-            "  Port for %s.%s (%s) [default: %d]: " % (name, domain, ip, suggested)
+            "  Port for %s.%s (%s) [listening: %s, default: %d]: "
+            % (name, domain, ip, describe_ports(ports), suggested)
         ).strip() or str(suggested)
         if re.match(r"^[0-9]+$", raw_port) and 1 <= int(raw_port) <= 65535:
             port = int(raw_port)
