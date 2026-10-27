@@ -12,15 +12,43 @@ setup() {
   export TEST_STATE_JSON="$MOCK_TMPDIR/state.json"
   export CADDY_LOCAL_CADDYFILE="$TEST_CADDYFILE"
   export CADDY_STATE_FILE="$TEST_STATE_JSON"
+  # Tripwire snapshots: teardown proves no test touched the real
+  # generator files (md5 when readable, size+mtime otherwise, so even
+  # root-owned 600 files are covered).
+  snapshot_file "$REPO_ROOT/caddy/Caddyfile.local" "$MOCK_TMPDIR/real.Caddyfile.local.snap"
+  snapshot_file "$REPO_ROOT/caddy/state.json" "$MOCK_TMPDIR/real.state.json.snap"
+}
+
+# Fingerprint a file for the setup/teardown tripwire.
+snapshot_file() {
+  if [ ! -e "$1" ]; then
+    echo "absent" > "$2"
+  elif [ -r "$1" ]; then
+    /usr/bin/md5sum "$1" | awk '{print "md5:" $1}' > "$2"
+  else
+    /usr/bin/stat -c 'stat:%s:%Y' "$1" > "$2"
+  fi
 }
 
 teardown() {
+  local failed=0
+  local tracked want current
+  for tracked in Caddyfile.local state.json; do
+    want=$(cat "$MOCK_TMPDIR/real.$tracked.snap")
+    snapshot_file "$REPO_ROOT/caddy/$tracked" "$MOCK_TMPDIR/real.$tracked.now"
+    current=$(cat "$MOCK_TMPDIR/real.$tracked.now")
+    if [ "$current" != "$want" ]; then
+      echo "teardown tripwire: real caddy/$tracked changed during test (was '$want', now '$current')" >&2
+      failed=1
+    fi
+  done
   # Safety net: the suite must never leave fixture data in the real file
   # (tests redirect via CADDY_* overrides; this catches any bypass).
   if [ -f "$REPO_ROOT/caddy/Caddyfile.local" ] && grep -q "bats-test" "$REPO_ROOT/caddy/Caddyfile.local" 2>/dev/null; then
     rm -f "$REPO_ROOT/caddy/Caddyfile.local"
   fi
   rm -rf "$MOCK_TMPDIR"
+  return "$failed"
 }
 
 # -------------------------------------------------------------------
