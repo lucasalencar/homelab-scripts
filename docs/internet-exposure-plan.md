@@ -86,7 +86,8 @@ Done when: an external scan sees only web ports.
 Caddy must be an explicit allowlist, not an automatic guest scanner.
 
 - [ ] Add an explicit public-service allowlist; require approval per public hostname.
-- [ ] Skip tagged guests (e.g. `no-auto-proxy`) by default; validate the Caddyfile before reload with rollback.
+- [x] Skip tagged guests (e.g. `no-auto-proxy`) by default.
+- [ ] Validate the Caddyfile before reload with rollback.
 - [ ] Public names use public ACME certs; `tls internal` only for internal names.
 - [ ] Persist Caddy storage across container recreation for renewal.
 

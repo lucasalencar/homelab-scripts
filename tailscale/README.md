@@ -40,9 +40,9 @@ No inbound port-forwards are opened.
 ## Caddy
 
 The router LXC is always tagged `no-auto-proxy` (hardcoded) and must never
-get a Caddy route. `caddy/generate-caddyfile.sh` lists every guest, so skip
-`tailscale-router` manually when prompted. Automatic tag filtering is future
-work (see `docs/internet-exposure-plan.md` Phase 4).
+get a Caddy route. `caddy/generate-caddyfile.sh` skips tagged guests
+automatically and drops their previously saved blocks instead of
+preserving them as unmanaged.
 
 ## Access model
 

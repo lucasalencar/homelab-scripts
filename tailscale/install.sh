@@ -100,6 +100,6 @@ log_info "  2. DNS: add a split-DNS entry for $DNS_ZONE pointing at ${adguard_ip
 log_info "  3. On your devices: install Tailscale with the same identity; run 'tailscale set --accept-routes' on Linux."
 log_info "  4. From off-LAN with VPN on: ping a LAN IP, then open the usual $DNS_ZONE URLs (fail-closed with VPN off)."
 echo ""
-log_warning "Caddy: '$ROUTER_NAME' carries the 'no-auto-proxy' tag — skip it when running caddy/generate-caddyfile.sh."
+log_warning "Caddy: '$ROUTER_NAME' carries the 'no-auto-proxy' tag — generate-caddyfile.sh skips it automatically."
 log_info "A re-run restarts the router briefly whenever TUN/forwarding converge; plan accordingly."
 log_info "Colleague access stays manual for now: no grants are created by this script (deny by default)."
