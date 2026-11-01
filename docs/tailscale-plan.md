@@ -34,20 +34,21 @@ Access model: you get full LAN + admin access; colleagues get nothing by default
 
 - [ ] Record home LAN CIDR (e.g. `192.168.15.0/24`).
 - [ ] Record AdGuard/LAN DNS IP and served zones (`marx.home`).
-- [ ] Decide which dedicated, otherwise empty LXC hosts the subnet router (router only, nothing else).
+- [ ] Decide the router LXC name (default `tailscale-router`; the script creates it with the next free CTID, router only, nothing else).
 - [ ] Decide colleague list and which `service:port` each one may reach.
 - [ ] Confirm tailnet admin account.
 
-Done when: LAN CIDR, DNS IP, router host, and per-colleague grants are written down.
+Done when: LAN CIDR, DNS IP, router name, and per-colleague grants are written down.
 
 ## Phase 1 — Install Tailscale
 
-See `tailscale/install.sh` and `tailscale/README.md` for the automated steps. Manual parts:
+Automated by `tailscale/install.sh` (see `tailscale/README.md` for env vars).
+Manual parts:
 
 - [ ] Create the tailnet with an identity you control (MFA on), note the tailnet name.
-- [ ] Create the dedicated `tailscale-router` LXC (1 core / 512 MB, `no-auto-proxy` tag so Caddy never routes it).
-- [ ] Run `bash tailscale/install.sh` on the Proxmox host (TUN passthrough + package install).
-- [ ] Inside the LXC: `tailscale up`, then `tailscale set --advertise-routes=<LAN-CIDR>`.
+- [ ] Create a Tailscale auth key (reusable, tagged, short expiry) and run on the Proxmox host:
+  `TAILSCALE_AUTHKEY='tskey-...' bash tailscale/install.sh`.
+  The script creates the dedicated `tailscale-router` LXC (1 core / 512 MB, `no-auto-proxy` tag so Caddy never routes it), enables TUN passthrough + IP forwarding, installs Tailscale, logs in with the key, and advertises the auto-detected LAN route.
 - [ ] In the admin console: approve the subnet route, disable key expiry for the router node.
 - [ ] Install Tailscale on laptop/phone with the same identity; on Linux run `tailscale set --accept-routes`.
 - [ ] From off-LAN with VPN on, ping a LAN IP.
@@ -125,6 +126,6 @@ Done when: updates, reviews, backups, and revocation drills are routine.
 
 - Home LAN CIDR.
 - AdGuard/LAN DNS IP and served zones.
-- Chosen subnet-router host.
+- Chosen subnet-router LXC name (defaults to `tailscale-router`; created automatically).
 - Tailnet admin account.
 - Colleague list with per-service grants.
