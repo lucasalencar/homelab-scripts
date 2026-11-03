@@ -32,7 +32,7 @@ Access model: you get full LAN + admin access; colleagues get nothing by default
 
 ## Phase 0 — Prerequisites
 
-- [ ] Record home LAN CIDR (e.g. `192.168.15.0/24`).
+- [ ] Record home LAN CIDR (e.g. `192.168.31.0/24`).
 - [ ] Record AdGuard/LAN DNS IP and served zones (`marx.home`).
 - [ ] Decide the router LXC name (default `tailscale-router`; the script creates it with the next free CTID, router only, nothing else).
 - [ ] Decide colleague list and which `service:port` each one may reach.
@@ -79,27 +79,19 @@ Reference: [Tailscale DNS](https://tailscale.com/kb/1054/dns).
 
 ## Phase 4 — Deny-by-default ACLs
 
-- [ ] Default action is deny; your user keeps full access.
-- [ ] Colleagues are named users with a tag such as `tag:team`, never a shared account.
-- [ ] Grants allow only named `service:port` pairs, never the whole subnet by default.
-- [ ] `autoApprovers` covers only your router identity.
+The current Tailscale console has no raw JSON editor: policies and
+auto-approvers are managed as separate UI entries. Same intent as code,
+done by hand:
 
-Example shape (adapt users, CIDR, ports):
-
-```json
-{
-  "groups": {
-    "group:team": ["mate@example.com"]
-  },
-  "grants": [
-    {
-      "src": ["group:team"],
-      "dst": ["192.168.15.0/24"],
-      "ip": ["tcp:8096"]
-    }
-  ]
-}
-```
+- [ ] Delete the default allow-all policy, so the default action is deny.
+- [ ] Create a policy with source = your email and destination = all users
+  and devices, so your user keeps full access.
+- [ ] In the separate auto-approvers section, add the LAN route
+  (`192.168.31.0/24`) set to auto-approve for your email.
+- [ ] Colleagues are invited by their own email (named users, never a shared
+  account), each with a policy limited to named `service:port` pairs only
+  (e.g. Jellyfin `tcp:8096`) — never the whole subnet, and never Proxmox
+  `8006`, SSH `22`, or DNS admin.
 
 Done when: a test colleague account reaches exactly its granted `service:port` and nothing else.
 
@@ -109,7 +101,7 @@ For each person:
 
 - [ ] Record who, which service, which `hostname:port`, and why, plus a review date.
 - [ ] Invite to the tailnet; they install Tailscale with their own identity.
-- [ ] Apply tag + grant; test only the granted URL over mobile data with VPN on.
+- [ ] Create their policy limited to the granted `service:port`; test only the granted URL over mobile data with VPN on.
 - [ ] Confirm Proxmox, SSH, and DNS admin are unreachable.
 
 Done when: every external person maps to a written grant with a review date.
