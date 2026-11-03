@@ -202,6 +202,12 @@ second" ]
   [ "$output" = "fail" ]
 }
 
+@test "get_exact_container_id_by_name returns 2 on multiple matches" {
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n105        running                 dup\n106        running                 dup'
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; get_exact_container_id_by_name "dup" >/dev/null 2>&1; echo "rc=$?"'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"rc=2"* ]]
+}
 @test "get_exact_container_id_by_name fails on zero or multiple matches" {
   export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n105        running                 starr'
   run bash -c 'source "$REPO_ROOT/common/functions.sh"; get_exact_container_id_by_name "missing" && echo ok || echo fail'

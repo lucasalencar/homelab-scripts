@@ -142,14 +142,37 @@ GUEST_NAMES=()
 GUEST_TYPES=()
 declare -A GUEST_IPS
 
+# Guests tagged no-auto-proxy (e.g. the Tailscale subnet router) are never
+# proxied. Their names are collected here so previously saved blocks for
+# them can be dropped instead of preserved.
+SKIPPED_NAMES=()
+
+# Returns 0 when the given `pct/qm config` output carries the no-auto-proxy tag.
+# Tags may be separated by commas, semicolons, or spaces.
+guest_has_no_proxy_tag() {
+    local guest_config="${1:-}"
+    local tags
+    tags=$(echo "$guest_config" | grep -E '^tags:' | sed -E 's/^tags:[[:space:]]*//' || true)
+    [ -n "$tags" ] || return 1
+    local normalized
+    normalized=$(echo "$tags" | tr '; ' ',')
+    [[ ",$normalized," == *",no-auto-proxy,"* ]]
+}
+
 # --- Collect containers (LXC) ---
 while IFS= read -r cid; do
     cid="${cid// /}"
     [ -z "$cid" ] && continue
 
-    name=$(pct config "$cid" 2>/dev/null | grep -oP 'hostname:\s*\K\S+' || true)
+    guest_config=$(pct config "$cid" 2>/dev/null || true)
+    name=$(echo "$guest_config" | grep -oP 'hostname:\s*\K\S+' || true)
     [ -z "$name" ] && continue
     [ "$name" = "$CADDY_CONTAINER_NAME" ] && continue
+    if guest_has_no_proxy_tag "$guest_config"; then
+        log_warning "  Skipping $name ($cid) — tagged no-auto-proxy, never proxied"
+        SKIPPED_NAMES+=("$name")
+        continue
+    fi
 
     ip=$(get_container_ip "$cid" || true)
     [ -z "$ip" ] && continue
@@ -165,9 +188,15 @@ while IFS= read -r vmid; do
     vmid="${vmid// /}"
     [ -z "$vmid" ] && continue
 
-    name=$(qm config "$vmid" 2>/dev/null | grep -oP '(?:hostname|name):\s*\K\S+' || true)
+    vm_config=$(qm config "$vmid" 2>/dev/null || true)
+    name=$(echo "$vm_config" | grep -oP '(?:hostname|name):\s*\K\S+' || true)
     [ -z "$name" ] && continue
     [ "$name" = "$CADDY_CONTAINER_NAME" ] && continue
+    if guest_has_no_proxy_tag "$vm_config"; then
+        log_warning "  Skipping $name ($vmid) — tagged no-auto-proxy, never proxied"
+        SKIPPED_NAMES+=("$name")
+        continue
+    fi
 
     if [ -n "${GUEST_IPS[$name]:-}" ]; then
         log_warning "  Skipping VM $vmid ($name) — name already used by another guest"
@@ -181,7 +210,7 @@ while IFS= read -r vmid; do
         ip=$(echo "$json" | jq -r '.["out-data"] // .["out"] // empty' 2>/dev/null | grep -oP 'inet \K[\d.]+' | grep -v '^127\.' | head -1 || true)
     fi
     if [ -z "$ip" ]; then
-        ip=$(qm config "$vmid" 2>/dev/null | grep -oP 'ipconfig\d:\s*ip=\K[^/]+' | head -1 || true)
+        ip=$(echo "$vm_config" | grep -oP 'ipconfig\d:\s*ip=\K[^/]+' | head -1 || true)
     fi
     [ -z "$ip" ] && continue
 
@@ -202,6 +231,9 @@ for i in $(seq 0 $((TOTAL - 1))); do
     type_label="[${GUEST_TYPES[$i]}]"
     log_info "  $type_label ${GUEST_IDS[$i]}: ${GUEST_NAMES[$i]} (${GUEST_IPS[${GUEST_NAMES[$i]}]})"
 done
+if [ "${#SKIPPED_NAMES[@]}" -gt 0 ]; then
+    log_warning "Skipped ${#SKIPPED_NAMES[@]} no-auto-proxy guest(s): ${SKIPPED_NAMES[*]}"
+fi
 echo ""
 
 # --- Determine entries for each guest (single- or multi-service) ---
@@ -345,6 +377,18 @@ echo ""
     done
     for saved in "${SAVED_NAMES[@]:-}"; do
         [ -z "$saved" ] && continue
+        is_skipped="n"
+        for skip in "${SKIPPED_NAMES[@]:-}"; do
+            [ -z "$skip" ] && continue
+            if [ "$saved" = "$skip" ]; then
+                is_skipped="y"
+                break
+            fi
+        done
+        if [ "$is_skipped" = "y" ]; then
+            log_warning "  Dropping $saved.$DOMAIN — guest is tagged no-auto-proxy (never proxied)" >&2
+            continue
+        fi
         is_final="n"
         for entry in "${FINAL_NAMES[@]}"; do
             if [ "$entry" = "$saved" ]; then

@@ -277,3 +277,136 @@ EOF
   run bash -n "$REPO_ROOT/caddy/generate-caddyfile.sh"
   [ "$status" -eq 0 ]
 }
+
+# -------------------------------------------------------------------
+# caddy/generate-caddyfile.sh — no-auto-proxy tag
+# -------------------------------------------------------------------
+
+@test "caddy generate skips guests tagged no-auto-proxy" {
+  if [ -f "$REPO_ROOT/caddy/Caddyfile.local" ]; then
+    cp "$REPO_ROOT/caddy/Caddyfile.local" "$MOCK_TMPDIR/Caddyfile.local.orig"
+  fi
+  rm -f "$REPO_ROOT/caddy/Caddyfile.local"
+
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n100        running                 caddy\n107        running                 jellyfin\n110        running                 tailscale-router'
+  export MOCK_PCT_CONFIG_100="hostname: caddy"
+  export MOCK_PCT_CONFIG_107="hostname: jellyfin"
+  export MOCK_PCT_CONFIG_110=$'hostname: tailscale-router\ntags: no-auto-proxy'
+  export MOCK_PCT_STATUS="status: running"
+  export MOCK_QM_LIST="VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID"
+  export MOCK_PCT_EXEC_HOSTNAME_I="10.0.0.7"
+  export MOCK_PCT_EXEC_SS_OUTPUT=$'State  Recv-Q Send-Q Local Address:Port PeerAddress:PortProcess\nLISTEN 0     128          0.0.0.0:8096      0.0.0.0:*'
+
+  run bash -c "printf '\n\n' | bash \"$REPO_ROOT/caddy/generate-caddyfile.sh\" 2>&1"
+  [ "$status" -eq 0 ]
+  gen_output="$output"
+  /usr/bin/grep -q "jellyfin.marx.home" "$REPO_ROOT/caddy/Caddyfile.local"
+  run /usr/bin/grep -q "tailscale-router" "$REPO_ROOT/caddy/Caddyfile.local"
+  [ "$status" -ne 0 ]
+  [[ "$gen_output" == *"no-auto-proxy"* ]]
+
+  if [ -f "$MOCK_TMPDIR/Caddyfile.local.orig" ]; then
+    cp "$MOCK_TMPDIR/Caddyfile.local.orig" "$REPO_ROOT/caddy/Caddyfile.local"
+  else
+    rm -f "$REPO_ROOT/caddy/Caddyfile.local"
+  fi
+}
+
+@test "caddy generate matches no-auto-proxy among multiple tags" {
+  if [ -f "$REPO_ROOT/caddy/Caddyfile.local" ]; then
+    cp "$REPO_ROOT/caddy/Caddyfile.local" "$MOCK_TMPDIR/Caddyfile.local.orig"
+  fi
+  rm -f "$REPO_ROOT/caddy/Caddyfile.local"
+
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n100        running                 caddy\n107        running                 jellyfin\n110        running                 tailscale-router'
+  export MOCK_PCT_CONFIG_100="hostname: caddy"
+  export MOCK_PCT_CONFIG_107="hostname: jellyfin"
+  export MOCK_PCT_CONFIG_110=$'hostname: tailscale-router\ntags: vpn;no-auto-proxy'
+  export MOCK_PCT_STATUS="status: running"
+  export MOCK_QM_LIST="VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID"
+  export MOCK_PCT_EXEC_HOSTNAME_I="10.0.0.7"
+  export MOCK_PCT_EXEC_SS_OUTPUT=$'State  Recv-Q Send-Q Local Address:Port PeerAddress:PortProcess\nLISTEN 0     128          0.0.0.0:8096      0.0.0.0:*'
+
+  run bash -c "printf '\n\n' | bash \"$REPO_ROOT/caddy/generate-caddyfile.sh\" 2>&1"
+  [ "$status" -eq 0 ]
+  gen_output="$output"
+  /usr/bin/grep -q "jellyfin.marx.home" "$REPO_ROOT/caddy/Caddyfile.local"
+  run /usr/bin/grep -q "tailscale-router" "$REPO_ROOT/caddy/Caddyfile.local"
+  [ "$status" -ne 0 ]
+  [[ "$gen_output" == *"no-auto-proxy"* ]]
+
+  if [ -f "$MOCK_TMPDIR/Caddyfile.local.orig" ]; then
+    cp "$MOCK_TMPDIR/Caddyfile.local.orig" "$REPO_ROOT/caddy/Caddyfile.local"
+  else
+    rm -f "$REPO_ROOT/caddy/Caddyfile.local"
+  fi
+}
+
+@test "caddy generate drops saved blocks of no-auto-proxy guests" {
+  if [ -f "$REPO_ROOT/caddy/Caddyfile.local" ]; then
+    cp "$REPO_ROOT/caddy/Caddyfile.local" "$MOCK_TMPDIR/Caddyfile.local.orig"
+  fi
+  cat > "$REPO_ROOT/caddy/Caddyfile.local" <<'EOF'
+http://jellyfin.marx.home {
+    reverse_proxy 10.0.0.7:8096
+}
+
+http://tailscale-router.marx.home {
+    reverse_proxy 10.0.0.8:80
+}
+
+EOF
+
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n100        running                 caddy\n107        running                 jellyfin\n110        running                 tailscale-router'
+  export MOCK_PCT_CONFIG_100="hostname: caddy"
+  export MOCK_PCT_CONFIG_107="hostname: jellyfin"
+  export MOCK_PCT_CONFIG_110=$'hostname: tailscale-router\ntags: no-auto-proxy'
+  export MOCK_PCT_STATUS="status: running"
+  export MOCK_QM_LIST="VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID"
+  export MOCK_PCT_EXEC_HOSTNAME_I="10.0.0.7"
+  export MOCK_PCT_EXEC_SS_OUTPUT=$'State  Recv-Q Send-Q Local Address:Port PeerAddress:PortProcess\nLISTEN 0     128          0.0.0.0:8096      0.0.0.0:*'
+
+  run bash "$REPO_ROOT/caddy/generate-caddyfile.sh" </dev/null 2>&1
+  [ "$status" -eq 0 ]
+  gen_output="$output"
+  /usr/bin/grep -q "jellyfin.marx.home" "$REPO_ROOT/caddy/Caddyfile.local"
+  run /usr/bin/grep -q "tailscale-router" "$REPO_ROOT/caddy/Caddyfile.local"
+  [ "$status" -ne 0 ]
+  [[ "$gen_output" == *"no-auto-proxy"* ]]
+
+  if [ -f "$MOCK_TMPDIR/Caddyfile.local.orig" ]; then
+    cp "$MOCK_TMPDIR/Caddyfile.local.orig" "$REPO_ROOT/caddy/Caddyfile.local"
+  else
+    rm -f "$REPO_ROOT/caddy/Caddyfile.local"
+  fi
+}
+
+@test "caddy generate skips VMs tagged no-auto-proxy" {
+  if [ -f "$REPO_ROOT/caddy/Caddyfile.local" ]; then
+    cp "$REPO_ROOT/caddy/Caddyfile.local" "$MOCK_TMPDIR/Caddyfile.local.orig"
+  fi
+  rm -f "$REPO_ROOT/caddy/Caddyfile.local"
+
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n100        running                 caddy\n107        running                 jellyfin'
+  export MOCK_PCT_CONFIG_100="hostname: caddy"
+  export MOCK_PCT_CONFIG_107="hostname: jellyfin"
+  export MOCK_PCT_STATUS="status: running"
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n201 team-vm                running    2048              32.00 12345'
+  export MOCK_QM_CONFIG_201=$'name: team-vm\ntags: no-auto-proxy\nipconfig0: ip=10.0.0.9/24,gw=10.0.0.1'
+  export MOCK_PCT_EXEC_HOSTNAME_I="10.0.0.7"
+  export MOCK_PCT_EXEC_SS_OUTPUT=$'State  Recv-Q Send-Q Local Address:Port PeerAddress:PortProcess\nLISTEN 0     128          0.0.0.0:8096      0.0.0.0:*'
+
+  run bash -c "printf '\n\n' | bash \"$REPO_ROOT/caddy/generate-caddyfile.sh\" 2>&1"
+  [ "$status" -eq 0 ]
+  gen_output="$output"
+  /usr/bin/grep -q "jellyfin.marx.home" "$REPO_ROOT/caddy/Caddyfile.local"
+  run /usr/bin/grep -q "team-vm" "$REPO_ROOT/caddy/Caddyfile.local"
+  [ "$status" -ne 0 ]
+  [[ "$gen_output" == *"no-auto-proxy"* ]]
+
+  if [ -f "$MOCK_TMPDIR/Caddyfile.local.orig" ]; then
+    cp "$MOCK_TMPDIR/Caddyfile.local.orig" "$REPO_ROOT/caddy/Caddyfile.local"
+  else
+    rm -f "$REPO_ROOT/caddy/Caddyfile.local"
+  fi
+}
