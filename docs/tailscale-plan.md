@@ -90,8 +90,8 @@ done by hand:
   (`192.168.31.0/24`) set to auto-approve for your email.
 - [ ] Colleagues are invited by their own email (named users, never a shared
   account), each with a policy limited to named `service:port` pairs only
-  (e.g. Jellyfin `tcp:8096`) — never the whole subnet, and never Proxmox
-  `8006`, SSH `22`, or DNS admin.
+  (e.g. Jellyfin at `192.168.31.181`, `tcp:8096`) — never the whole subnet,
+  and never Proxmox `8006`, SSH `22`, or DNS admin.
 
 Done when: a test colleague account reaches exactly its granted `service:port` and nothing else.
 
