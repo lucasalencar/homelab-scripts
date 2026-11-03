@@ -73,6 +73,9 @@ tailscale_ensure_forwarding "$container_id" || exit 1
 
 # --- 3. Install Tailscale (official script is idempotent; download first so a fetch failure surfaces here) ---
 log_step "Installing Tailscale inside container $container_id..."
+# Minimal Debian templates ship without curl — install deps first.
+pct exec "$container_id" -- apt update
+pct exec "$container_id" -- apt install -y curl ca-certificates
 pct exec "$container_id" -- bash -c 'curl -fsSL --proto "=https" --tlsv1.2 -o /tmp/tailscale-install.sh https://tailscale.com/install.sh && sh /tmp/tailscale-install.sh'
 pct exec "$container_id" -- systemctl enable --now tailscaled
 

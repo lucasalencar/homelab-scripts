@@ -165,6 +165,21 @@ teardown() {
 # tailscale/install.sh — router provisioning
 # -------------------------------------------------------------------
 
+@test "tailscale install installs curl before downloading tailscale" {
+  export TAILSCALE_AUTHKEY="tskey-test-123"
+  export MOCK_TAILSCALE_LOGGED_IN="0"
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n100        running                 caddy'
+  export MOCK_PCT_CONFIG_110="hostname: tailscale-router"
+
+  run bash "$REPO_ROOT/tailscale/install.sh"
+  [ "$status" -eq 0 ]
+  deps_line=$(grep -n "apt install -y curl ca-certificates" "$MOCK_LOG" | head -1 | cut -d: -f1)
+  dl_line=$(grep -n "tailscale-install.sh" "$MOCK_LOG" | head -1 | cut -d: -f1)
+  [ -n "$deps_line" ]
+  [ -n "$dl_line" ]
+  [ "$deps_line" -lt "$dl_line" ]
+}
+
 @test "tailscale install creates a dedicated router tagged no-auto-proxy" {
   export TAILSCALE_AUTHKEY="tskey-test-123"
   export MOCK_TAILSCALE_LOGGED_IN="0"
