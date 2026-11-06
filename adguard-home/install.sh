@@ -19,7 +19,11 @@ container_id=$(ensure_container_installed "adguard" "$ADGUARD_INSTALL_CMD") || e
 
 log_info "Identified Container ID: $container_id"
 
-pct start "$container_id"
+# AdGuard must keep a stable IP: Caddy reverse_proxy entries and the
+# *.marx.home rewrites point at it. Pin it (idempotent; restarts the CT
+# only when the address changes). Other packages stay on DHCP.
+pct start "$container_id" 2>/dev/null || true
+ensure_static_ip "$container_id" "${ADGUARD_STATIC_IP:-192.168.31.22/24}" "${LAN_GATEWAY:-192.168.31.1}" || exit 1
 
 log_success "Installation completed for AdGuard Home (ID: $container_id)."
 
