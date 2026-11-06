@@ -69,6 +69,12 @@ if $has_P; then
     exit 0
   fi
 
+  # net0 pattern: ^net0:\s*\K.*  -> whole net0 value (empty when absent)
+  if [[ "$pattern" == *"net0"* ]]; then
+    echo "$input" | grep -E '^net0:' | sed -E 's/^net0:[[:space:]]*//' | head -1
+    exit 0
+  fi
+
   # hostname pattern
   if [[ "$pattern" == *"hostname"* ]]; then
     echo "$input" | sed -E 's/.*hostname:[[:space:]]*([^[:space:]]+).*/\1/' | head -1

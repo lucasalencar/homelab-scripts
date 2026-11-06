@@ -513,6 +513,92 @@ apply_mounts() {
     wait_container_ready "$container_id"
 }
 
+# Pins a static IPv4 on a container's net0, preserving bridge/hwaddr/firewall.
+# Idempotent: no-op when net0 already carries the wanted ip+gw.
+# A stopped container is only reconfigured (never started by this function),
+# so DHCP leases elsewhere are untouched. Proxmox rewrites the guest's
+# network config on start; when the guest used DHCP, dhclient simply finds
+# no lease to renew afterwards.
+# Usage: ensure_static_ip <container_id> <ipv4_cidr> <gateway>
+# Example: ensure_static_ip 103 192.168.31.22/24 192.168.31.1
+ensure_static_ip() {
+    local container_id="${1:-}"
+    local want_cidr="${2:-}"
+    local want_gw="${3:-}"
+
+    if [ -z "$container_id" ] || [ -z "$want_cidr" ] || [ -z "$want_gw" ]; then
+        log_error "ensure_static_ip: usage: ensure_static_ip <container_id> <ipv4_cidr> <gateway>"
+        return 1
+    fi
+    if ! validate_ipv4_cidr "$want_cidr"; then
+        log_error "ensure_static_ip: invalid IPv4 CIDR '$want_cidr'"
+        return 1
+    fi
+    if ! validate_ipv4_cidr "$want_gw/32"; then
+        log_error "ensure_static_ip: invalid gateway '$want_gw'"
+        return 1
+    fi
+
+    local net0
+    net0=$(pct config "$container_id" 2>/dev/null | grep -oP '^net0:\s*\K.*' || true)
+    if [ -z "$net0" ]; then
+        log_error "ensure_static_ip: container $container_id has no net0"
+        return 1
+    fi
+
+    # Keep the CIDR prefix: match the whole ip=/gw= token with -E
+    # (portable, no PCRE needed) and strip the key in bash.
+    local cur_ip cur_gw token
+    cur_ip=""
+    cur_gw=""
+    token=$(printf '%s' "$net0" | grep -oE '(^|,)ip=[^,]+' | head -1 || true)
+    token="${token#,}"
+    cur_ip="${token#ip=}"
+    token=$(printf '%s' "$net0" | grep -oE '(^|,)gw=[^,]+' | head -1 || true)
+    token="${token#,}"
+    cur_gw="${token#gw=}"
+    if [ "$cur_ip" = "$want_cidr" ] && [ "$cur_gw" = "$want_gw" ]; then
+        log_info "Container $container_id net0 already $want_cidr gw $want_gw — nothing to do."
+        return 0
+    fi
+
+    # Rebuild net0 keeping every key except ip/gw/type (type=veth is
+    # Proxmox-managed and must not be passed back to pct set, which
+    # rejects it as a malformed list property).
+    local new_net0
+    new_net0=$(printf '%s' "$net0" | sed -E 's/(^|,)ip=[^,]*//g; s/(^|,)gw=[^,]*//g; s/(^|,)type=[^,]*//g; s/^,+//; s/,+/,/g; s/,+$//')
+    new_net0="${new_net0#,}"
+    if [ -n "$new_net0" ]; then
+        new_net0="${new_net0},"
+    fi
+    new_net0="${new_net0}ip=${want_cidr},gw=${want_gw}"
+
+    local running=0
+    if pct status "$container_id" 2>/dev/null | grep -q "running"; then
+        running=1
+    fi
+
+    if [ "$running" = "1" ]; then
+        log_step "Stopping container $container_id to pin net0..."
+        pct stop "$container_id" 2>/dev/null
+    fi
+
+    log_info "Setting net0: $new_net0"
+    if ! pct set "$container_id" -net0 "$new_net0"; then
+        log_error "ensure_static_ip: pct set failed for container $container_id"
+        if [ "$running" = "1" ]; then
+            pct start "$container_id" 2>/dev/null || true
+        fi
+        return 1
+    fi
+
+    if [ "$running" = "1" ]; then
+        log_step "Starting container $container_id..."
+        pct start "$container_id"
+        wait_container_ready "$container_id"
+    fi
+}
+
 # Returns the container ID by its name (partial match, case-insensitive)
 # Usage: get_container_id_by_name "name"
 get_container_id_by_name() {
