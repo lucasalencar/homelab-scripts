@@ -69,15 +69,15 @@ _install_env() {
   grep -q "discard=on,ssd=1" "$MOCK_LOG"
 }
 
-@test "coding-vm install defaults to 12GB memory with 8GB balloon floor" {
+@test "coding-vm install defaults to 16GB memory with balloon disabled" {
   _install_env
   unset CODING_VM_MEMORY_MB
   unset CODING_VM_BALLOON_MB
   export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  home-assistant       running    4096              32.00 12345'
   run bash "$REPO_ROOT/coding-vm/install.sh"
   [ "$status" -eq 0 ]
-  grep -q -- "--memory 12288" "$MOCK_LOG"
-  grep -q -- "--balloon 8192" "$MOCK_LOG"
+  grep -q -- "--memory 16384" "$MOCK_LOG"
+  grep -q -- "--balloon 16384" "$MOCK_LOG"
 }
 
 @test "coding-vm install respects memory/balloon overrides" {
