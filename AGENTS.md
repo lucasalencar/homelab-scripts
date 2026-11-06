@@ -109,3 +109,16 @@ Locked by `tests/unit/no-hardcoded-users.bats` and
 committed files must not contain its usernames), plus hard `deny` rules in
 `opencode.json` (`edit` on the path; shell `rm`/`mv`/`unlink`/`shred`/`cp`/
 `tee`/redirect/`git clean -f` touching it). Do not weaken those rules.
+
+### 15. Package isolation (no centralized cross-package scripts)
+
+Each package (`adguard-home/`, `caddy/`, `starr/`, ...) owns its full
+lifecycle (`install.sh`/`update.sh`) and must not depend on another package's
+state to install, update, or run. Shared logic lives in
+`common/functions.sh`; per-package values (ports, credentials, paths)
+live in that package's own scripts with env overrides
+(`TAILSCALE_LAN_CIDR`, ...). Do not create a central orchestrator that
+converges N packages from one inventory — it couples unrelated lifecycles
+(installing `starr` alone must never require, or touch, `caddy`). Only
+introduce a cross-package dependency when strictly necessary, make it
+explicit at the call site, and keep it idempotent.
