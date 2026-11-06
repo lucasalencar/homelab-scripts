@@ -62,20 +62,13 @@ Every generated script must satisfy all of these:
 
 ## Pause message
 
-Keep it copy-paste ready, in this shape:
-
-```text
-Blocked on sudo: <one line>.
-Script ready: /tmp/opencode-diag/<slug>-<NN>.sh
-
-Run where sudo works:
-  sudo bash /tmp/opencode-diag/<slug>-<NN>.sh
-  cat /tmp/opencode-diag/<slug>-<NN>.out
-
-Reply `continue` when done. If that host cannot see this
-session's /tmp, recreate the script from the content above,
-run it there, and paste the RESULT file content with `continue`.
-```
+Phrase it in the words of the ongoing conversation, but every
+handoff must include the exact command to run where sudo works
+(`sudo bash /tmp/opencode-diag/<slug>-<NN>.sh`, then
+`cat /tmp/opencode-diag/<slug>-<NN>.out`) and how to hand back:
+signal when done (e.g. say `continue`) so the agent reads the
+result file, or paste the RESULT content directly when `/tmp`
+is not shared with the sudo host.
 
 ## Resume contract
 
