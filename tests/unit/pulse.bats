@@ -100,6 +100,56 @@ COMMUNITY_CT="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main
 }
 
 # -------------------------------------------------------------------
+# pulse/lib.sh — Pulse API helpers (shared by pulse/ and starr/ sync scripts)
+# -------------------------------------------------------------------
+
+@test "pulse_api_base prints base URL from discovered container IP" {
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n107        running                 pulse'
+  export MOCK_PCT_EXEC_HOSTNAME_I="10.0.0.7"
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; source "$REPO_ROOT/pulse/lib.sh"; pulse_api_base'
+  [ "$status" -eq 0 ]
+  [ "$output" = "http://10.0.0.7:7655" ]
+}
+
+@test "pulse_api_base fails when pulse container is missing" {
+  export MOCK_PCT_LIST="VMID       Status     Lock         Name"
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; source "$REPO_ROOT/pulse/lib.sh"; pulse_api_base'
+  [ "$status" -ne 0 ]
+}
+
+@test "pulse_api_header writes token to a 0600 file, never argv" {
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; source "$REPO_ROOT/pulse/lib.sh"; pulse_api_header "tok-abc"'
+  [ "$status" -eq 0 ]
+  header="$output"
+  [ "$(/usr/bin/stat -c %a "$header")" = "600" ]
+  /usr/bin/grep -q "tok-abc" "$header"
+  run /usr/bin/grep -q "tok-abc" "$MOCK_LOG"
+  [ "$status" -ne 0 ]
+  rm -f "$header"
+}
+
+@test "pulse_availability_list normalizes bare array and targets object" {
+  export MOCK_PULSE_TARGETS='[{"id":"t1","name":"a","address":"1.1.1.1"}]'
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; source "$REPO_ROOT/pulse/lib.sh"; pulse_availability_list "http://x:7655" "$MOCK_TMPDIR/h"'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"t1"'* ]]
+  export MOCK_PULSE_TARGETS='{"targets": [{"id":"t2","name":"b","address":"2.2.2.2"}]}'
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; source "$REPO_ROOT/pulse/lib.sh"; pulse_availability_list "http://x:7655" "$MOCK_TMPDIR/h"'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"t2"'* ]]
+}
+
+@test "pulse_availability_payload includes port for tcp, omits for icmp" {
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; source "$REPO_ROOT/pulse/lib.sh"; pulse_availability_payload "svc-sonarr" "10.0.0.5" "tcp" "8989" 60 2000 2'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"port":8989'* ]]
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; source "$REPO_ROOT/pulse/lib.sh"; pulse_availability_payload "ping-x" "10.0.0.5" "icmp" "" 60 2000 2'
+  [ "$status" -eq 0 ]
+  [[ "$output" != *'"port"'* ]]
+  [[ "$output" == *'"protocol":"icmp"'* ]]
+}
+
+# -------------------------------------------------------------------
 # pulse/README.md
 # -------------------------------------------------------------------
 
