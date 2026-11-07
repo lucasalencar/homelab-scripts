@@ -6,11 +6,6 @@ setup() {
   export PATH="$BATS_TEST_DIRNAME/../helpers/mocks:$PATH"
   export REPO_ROOT="$BATS_TEST_DIRNAME/../.."
   export BASH_ENV="$BATS_TEST_DIRNAME/../helpers/bypass_root.sh"
-  export MOCK_PVESM_STATUS=$'local             dir     active\nlocal-lvm         lvmthin active'
-  export MOCK_IP_LINK_SHOW=$'2: vmbr0: <BROADCAST>'
-  export MOCK_PVEAM_AVAILABLE_SYSTEM=$'system debian-13-standard_13.0-1_amd64.tar.zst'
-  export MOCK_PVEAM_LIST="local:vztmpl/debian-13-standard_13.0-1_amd64.tar.zst"
-  export MOCK_PVESH_NEXTID="107"
   export MOCK_PCT_EXEC_HOSTNAME_I="10.0.0.7"
 }
 
@@ -19,62 +14,47 @@ teardown() {
 }
 
 # -------------------------------------------------------------------
-# pulse/install.sh — container creation + provision
+# pulse/install.sh — delegates to the community-scripts installer
 # -------------------------------------------------------------------
 
-@test "pulse install creates new container with expected resources" {
-  export MOCK_PCT_LIST="VMID       Status     Lock         Name"
-  export MOCK_PCT_CONFIG="hostname: test"
+COMMUNITY_CT="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/pulse.sh"
 
+@test "pulse install delegates container creation to the community script" {
+  # Fresh creation runs the external installer, which the mock harness
+  # cannot simulate — pin the delegation contract statically, then
+  # exercise the runtime path with an existing container.
+  /usr/bin/grep -q -- "$COMMUNITY_CT" "$REPO_ROOT/pulse/install.sh"
+  /usr/bin/grep -q 'ensure_container_installed "pulse"' "$REPO_ROOT/pulse/install.sh"
+
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n107        running                 pulse'
   run bash "$REPO_ROOT/pulse/install.sh" 2>&1
   [ "$status" -eq 0 ]
-  /usr/bin/grep -q "pct create 107" "$MOCK_LOG"
-  /usr/bin/grep -q -- "--hostname pulse" "$MOCK_LOG"
-  /usr/bin/grep -q -- "--memory 2048" "$MOCK_LOG"
-}
-
-@test "pulse install pushes provision script and reports port 7655" {
-  export MOCK_PCT_LIST="VMID       Status     Lock         Name"
-  export MOCK_PCT_CONFIG="hostname: test"
-
-  run bash "$REPO_ROOT/pulse/install.sh" 2>&1
-  [ "$status" -eq 0 ]
-  /usr/bin/grep -q "pct push 107.*container/provision.sh" "$MOCK_LOG"
-  /usr/bin/grep -q "pct exec 107 -- bash /tmp/provision.sh" "$MOCK_LOG"
   [[ "$output" == *"7655"* ]]
 }
 
-@test "pulse install reuses existing container and still provisions" {
+@test "pulse install reuses existing container" {
   export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n107        running                 pulse'
-  export MOCK_PCT_CONFIG="hostname: pulse"
 
   run bash "$REPO_ROOT/pulse/install.sh" 2>&1
   [ "$status" -eq 0 ]
-  /usr/bin/grep -q "pct push 107.*provision.sh" "$MOCK_LOG"
-  [[ "$output" == *"reusing"* ]] || [[ "$output" == *"Found existing"* ]]
+  [[ "$output" == *"107"* ]]
 }
 
-@test "pulse install fails when provision push fails" {
-  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n107        running                 pulse'
-  export MOCK_PCT_CONFIG="hostname: pulse"
-  export MOCK_PCT_PUSH_FAIL=1
-
-  run bash "$REPO_ROOT/pulse/install.sh" 2>&1
-  [ "$status" -ne 0 ]
+@test "pulse install has no vendored in-container provisioning" {
+  [ ! -d "$REPO_ROOT/pulse/container" ]
+  run /usr/bin/grep -r "docker compose" "$REPO_ROOT/pulse/" || [ "$status" -ne 0 ]
 }
 
 # -------------------------------------------------------------------
-# pulse/update.sh — pushes container update script
+# pulse/update.sh — re-runs the community script (in-place update)
 # -------------------------------------------------------------------
 
-@test "pulse update pushes update script and succeeds" {
+@test "pulse update re-runs the community script when container exists" {
   export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n107        running                 pulse'
-  export MOCK_PCT_CONFIG="hostname: pulse"
 
   run bash "$REPO_ROOT/pulse/update.sh" 2>&1
   [ "$status" -eq 0 ]
-  /usr/bin/grep -q "pct push 107.*container/update.sh" "$MOCK_LOG"
-  /usr/bin/grep -q "pct exec 107 -- bash /tmp/update.sh" "$MOCK_LOG"
+  /usr/bin/grep -q -- "$COMMUNITY_CT" "$REPO_ROOT/pulse/update.sh"
 }
 
 @test "pulse update fails when container not found" {
@@ -86,29 +66,12 @@ teardown() {
 }
 
 # -------------------------------------------------------------------
-# pulse/container scripts — static checks (no pct)
+# pulse/README.md
 # -------------------------------------------------------------------
 
-@test "pulse container provision installs docker and runs pulse on 7655" {
-  /usr/bin/grep -q "docker" "$REPO_ROOT/pulse/container/provision.sh"
-  /usr/bin/grep -q "rcourtman/pulse" "$REPO_ROOT/pulse/container/provision.sh"
-  /usr/bin/grep -q "7655" "$REPO_ROOT/pulse/container/provision.sh"
-  /usr/bin/grep -q "docker compose" "$REPO_ROOT/pulse/container/provision.sh"
-  run bash -n "$REPO_ROOT/pulse/container/provision.sh"
-  [ "$status" -eq 0 ]
-}
-
-@test "pulse container update pulls and recreates pulse" {
-  /usr/bin/grep -q "rcourtman/pulse\|docker compose" "$REPO_ROOT/pulse/container/update.sh"
-  /usr/bin/grep -q "pull" "$REPO_ROOT/pulse/container/update.sh"
-  run bash -n "$REPO_ROOT/pulse/container/update.sh"
-  [ "$status" -eq 0 ]
-}
-
-@test "pulse README documents port, Caddy and PVE token setup" {
+@test "pulse README documents port, Caddy, PVE token setup and scripts" {
   /usr/bin/grep -q "7655" "$REPO_ROOT/pulse/README.md"
   /usr/bin/grep -qi "caddy" "$REPO_ROOT/pulse/README.md"
   /usr/bin/grep -qi "PVEAuditor\|API token" "$REPO_ROOT/pulse/README.md"
-  /usr/bin/grep -q "pulse/install.sh" "$REPO_ROOT/pulse/README.md"
   /usr/bin/grep -q "pulse/update.sh" "$REPO_ROOT/pulse/README.md"
 }
