@@ -153,6 +153,23 @@ COMMUNITY_CT="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main
 # pulse/README.md
 # -------------------------------------------------------------------
 
+@test "pulse install recommends plain HTTP Caddy block, not tls internal" {
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n107        running                 pulse'
+
+  run bash "$REPO_ROOT/pulse/install.sh" 2>&1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"http://pulse.marx.home"* ]]
+  /usr/bin/grep -q "http://pulse.marx.home" "$REPO_ROOT/pulse/install.sh"
+  run /usr/bin/grep -q "tls internal" "$REPO_ROOT/pulse/install.sh"
+  [ "$status" -ne 0 ]
+}
+
+@test "pulse README documents plain HTTP Caddy block, not tls internal" {
+  /usr/bin/grep -q "http://pulse.marx.home" "$REPO_ROOT/pulse/README.md"
+  run /usr/bin/grep -q "tls internal" "$REPO_ROOT/pulse/README.md"
+  [ "$status" -ne 0 ]
+}
+
 @test "pulse README documents port, Caddy, PVE token setup and scripts" {
   /usr/bin/grep -q "7655" "$REPO_ROOT/pulse/README.md"
   /usr/bin/grep -qi "caddy" "$REPO_ROOT/pulse/README.md"

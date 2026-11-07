@@ -63,8 +63,7 @@ bash pulse/sync-ping-availability.sh --prune
 Single CT = single port. Append to `caddy/Caddyfile.local`:
 
 ```
-pulse.marx.home {
-    tls internal
+http://pulse.marx.home {
     reverse_proxy <IP>:7655
 }
 ```

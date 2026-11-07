@@ -32,8 +32,8 @@ if [ -n "$container_ip" ]; then
     log_info "     Select user -> API Tokens -> Add, copy token ID + secret."
     log_info "  3. In Pulse: Settings -> Infrastructure -> Add Proxmox + paste host, user, token."
     echo ""
-    log_info "Caddy (single port, TLS internal):"
-    log_info "  pulse.marx.home { tls internal; reverse_proxy ${container_ip}:7655 }"
+    log_info "Caddy (single port, plain HTTP):"
+    log_info "  http://pulse.marx.home { reverse_proxy ${container_ip}:7655 }"
     log_info "  Run: bash caddy/generate-caddyfile.sh"
 else
     log_success "Pulse installed (container $container_id) — could not determine IP, check: pct exec $container_id -- hostname -I"
