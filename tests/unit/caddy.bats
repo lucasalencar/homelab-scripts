@@ -272,6 +272,44 @@ EOF
   [[ "$output" == *"generate-caddyfile"* ]]
 }
 
+@test "caddy pull-caddyfile pulls the live file from the container" {
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n100        running                 caddy'
+  export MOCK_PCT_CONFIG_100="hostname: caddy"
+  export MOCK_PCT_PULL_CONTENT='# bats-test
+foo.marx.home {
+    reverse_proxy 10.0.0.5:1234
+}'
+  local dest="$MOCK_TMPDIR/Caddyfile.pulled"
+  run bash "$REPO_ROOT/caddy/pull-caddyfile.sh" --file "$dest" 2>&1
+  [ "$status" -eq 0 ]
+  /usr/bin/grep -q "pct pull 100" "$MOCK_LOG"
+  /usr/bin/grep -q "foo.marx.home" "$dest"
+}
+
+@test "caddy pull-caddyfile overwrites an existing local file" {
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n100        running                 caddy'
+  export MOCK_PCT_CONFIG_100="hostname: caddy"
+  export MOCK_PCT_PULL_CONTENT='# bats-test
+foo.marx.home {
+    reverse_proxy 10.0.0.5:1234
+}'
+  local dest="$MOCK_TMPDIR/Caddyfile.pulled"
+  echo "stale content" > "$dest"
+  run bash "$REPO_ROOT/caddy/pull-caddyfile.sh" --file "$dest" 2>&1
+  [ "$status" -eq 0 ]
+  /usr/bin/grep -q "foo.marx.home" "$dest"
+  run /usr/bin/grep -q "stale content" "$dest"
+  [ "$status" -ne 0 ]
+}
+
+@test "caddy pull-caddyfile fails when the container is missing" {
+  export MOCK_PCT_LIST="VMID       Status     Lock         Name"
+  export MOCK_QM_LIST="VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID"
+  run bash "$REPO_ROOT/caddy/pull-caddyfile.sh" --file "$MOCK_TMPDIR/Caddyfile.pulled" 2>&1
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not found"* ]]
+}
+
 @test "caddy generate delegates the push step to push-caddyfile.sh" {
   /usr/bin/grep -q "push-caddyfile.sh" "$REPO_ROOT/caddy/generate-caddyfile.sh"
   run bash -n "$REPO_ROOT/caddy/generate-caddyfile.sh"

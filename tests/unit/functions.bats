@@ -278,9 +278,11 @@ second" ]
 @test "get_container_ip returns IP from pct exec" {
   export MOCK_PCT_EXEC_HOSTNAME_I="10.0.0.5 10.0.0.6"
   # wait_container_ready should succeed (pct exec -- true returns 0)
-  run bash -c 'source "$REPO_ROOT/common/functions.sh"; get_container_ip 101'
+  # Logs go to stderr so stdout stays clean for command substitution.
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; ip=$(get_container_ip 101 2>"$MOCK_TMPDIR/stderr.log"); echo "$ip"'
   [ "$status" -eq 0 ]
   [ "$output" = "10.0.0.5" ]
+  /usr/bin/grep -q "Waiting for container" "$MOCK_TMPDIR/stderr.log"
 }
 
 @test "get_container_ip falls back to pct config when exec returns empty" {

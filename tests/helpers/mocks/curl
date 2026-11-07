@@ -1,7 +1,33 @@
 #!/usr/bin/env bash
+# Mock for curl: Pulse API-aware, legacy installer fallback otherwise.
 set -euo pipefail
 source "$(dirname "$0")/../mock_lib.sh"
 mock_log "curl" "$@"
+
+is_pulse_api=0
+for arg in "$@"; do
+  case "$arg" in
+    *"/api/availability-targets"*) is_pulse_api=1 ;;
+  esac
+done
+
+if [ "$is_pulse_api" = "1" ]; then
+  method="GET"
+  prev=""
+  for arg in "$@"; do
+    if [ "$prev" = "--request" ] || [ "$prev" = "-X" ]; then
+      method="$arg"
+    fi
+    prev="$arg"
+  done
+  case "$method" in
+    GET) echo "${MOCK_PULSE_TARGETS:-[]}" ;;
+    POST) echo '{"id":"mock-new-id","protocol":"icmp"}' ;;
+    PUT|PATCH|DELETE) echo '{}' ;;
+    *) echo '{}' ;;
+  esac
+  exit 0
+fi
 # Return empty script that does nothing, to avoid network
 echo 'echo "mock curl install script executed"'
 exit 0

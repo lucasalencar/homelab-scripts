@@ -52,11 +52,24 @@ Every package with an `install.sh` must also have an `update.sh`.
 - Source `common/functions.sh` and use its helpers.
 - For root-only scripts acting on behalf of the primary user, use `get_primary_user` / `get_primary_user_home` and `su -c "..." "$TARGET_USER"`.
 
-### 9. Learnings file — read
+### 9. Prefer community-scripts installers
+
+Before implementing any new package, check https://community-scripts.org/
+for an existing installer that does what is needed. When one exists, prefer
+delegating container creation and in-container setup to it via
+`ensure_container_installed` (see `adguard-home/install.sh`). Re-running the
+same community `ct/*.sh` command is also their documented update flow, so
+`update.sh` can reuse it. Apply critical judgment against the user's stated
+criteria and requirements (resource footprint, update behavior, trust,
+testability) — only implement custom provisioning when the community script
+offers no benefit or would make the overall setup more complicated. Keep our
+own `update.sh` symmetry and README docs regardless of the install path.
+
+### 10. Learnings file — read
 
 At the start of every session, read `LEARNINGS.md` at the repository root. It contains past learnings, common model mistakes, and solutions. Apply them to avoid repeating errors.
 
-### 10. Learnings file — write
+### 11. Learnings file — write
 
 During a session, append any non-obvious fix, recurring pitfall, or design decision worth remembering to `LEARNINGS.md`. Write entries that are **generic and actionable** so future sessions benefit. Use simple bullet points:
 
@@ -68,14 +81,14 @@ Do **not** duplicate rules already explicitly stated in `AGENTS.md` as learnings
 
 **Keep learnings generalizable** — they should describe patterns, behaviors, or pitfalls that could apply to multiple scripts or contexts, not specific fixes applied to a particular script. For example, prefer "Proxmox `pct exec` does not support `--env`; use `env KEY=val` inside the container command instead" over "Fixed sync-users.sh by using env instead of --env".
 
-### 11. Code comments — keep concise and sparse
+### 12. Code comments — keep concise and sparse
 
 Code comments should describe **what** is being done, not **why**. Keep them short and avoid long-winded rationale. Put the reasoning in docs, PR descriptions, or `LEARNINGS.md` instead. This applies to `*.sh` and source files; `docs/*.md` may keep why-explanations for user understanding.
 
 - Add a comment only when truly necessary — prefer self-explanatory code and helper names.
 - Before adding a comment, check if it should be a log instead (`log_step`, `log_info`, `log_success`, etc.) to give the user runtime visibility.
 
-### 12. CI must be green after every push
+### 13. CI must be green after every push
 
 After every `git push` (new branch, PR update, or any remote push), wait for GitHub Actions CI to finish and ensure it is green before considering the task done.
 
@@ -83,14 +96,14 @@ After every `git push` (new branch, PR update, or any remote push), wait for Git
 - If CI fails, fix the failure immediately with a follow-up commit/push — never leave a pushed branch with red CI.
 - This applies even when the user did not explicitly ask to check CI.
 
-### 13. READMEs must not re-explain scripts
+### 14. READMEs must not re-explain scripts
 
 Package READMEs document usage and user-facing info (commands to run, ports, folder structure, post-install steps, verification). They must not narrate step-by-step what the script does — the script's own logs and code are the single source of truth, and duplicated narration drifts stale.
 
 - Link to the script (`see starr/install.sh`) instead of copying its logic.
 - Never paste generated output (e.g. Caddyfile snippets) into logs or READMEs when a generator owns it — point at the generator instead.
 
-### 14. Never leak .server_users humans into committed content
+### 15. Never leak .server_users humans into committed content
 
 The usernames in `.server_users` are real people (primary + secondary users).
 Never hardcode them in scripts, docs, or examples: resolve them dynamically

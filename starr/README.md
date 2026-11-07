@@ -30,6 +30,16 @@ bash starr/update.sh
 
 See `starr/update.sh` for details.
 
+## Availability checks
+
+One TCP check per service (see `starr/sync-pulse-service-availability.sh`):
+
+```bash
+export PULSE_API_TOKEN='<token>'  # Pulse Settings -> API Access (admin, settings:read/write)
+bash starr/sync-pulse-service-availability.sh --dry-run
+bash starr/sync-pulse-service-availability.sh --prune
+```
+
 ## Configure
 
 ```bash
