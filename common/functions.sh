@@ -274,13 +274,14 @@ ensure_container_installed() {
     container_id=$(get_container_id_by_name "$name")
 
     if [ -z "$container_id" ]; then
-        echo "$name container not found. Running installation..." >&2
+        log_step "$name container not found. Installing (this may take a few minutes)..." >&2
         bash -c "$install_cmd"
 
+        log_info "Installation command finished, checking for container '$name'..." >&2
         # Get ID again after installation
         container_id=$(get_container_id_by_name "$name")
     else
-        echo "$name container already exists (ID: $container_id). Skipping installation." >&2
+        log_info "$name container already exists (ID: $container_id). Skipping installation." >&2
     fi
 
     if [ -z "$container_id" ]; then
@@ -300,8 +301,10 @@ wait_container_ready() {
     local sleep_seconds="${3:-2}"
     local attempt=1
 
+    log_info "Waiting for container $container_id to respond (up to $((max_attempts * sleep_seconds))s)..." >&2
     while [ "$attempt" -le "$max_attempts" ]; do
         if pct exec "$container_id" -- true 2>/dev/null; then
+            log_info "Container $container_id is ready." >&2
             return 0
         fi
         sleep "$sleep_seconds"
@@ -321,8 +324,10 @@ wait_vm_ready() {
     local sleep_seconds="${3:-5}"
     local attempt=1
 
+    log_info "Waiting for VM $vmid to respond (up to $((max_attempts * sleep_seconds))s)..." >&2
     while [ "$attempt" -le "$max_attempts" ]; do
         if qm guest exec "$vmid" -- true 2>/dev/null; then
+            log_info "VM $vmid is ready." >&2
             return 0
         fi
         sleep "$sleep_seconds"
@@ -846,6 +851,7 @@ ensure_debian_template() {
     local storage="${2:-$(get_pve_template_storage)}"
     local template=""
 
+    log_info "Updating template list (this may take a moment)..." >&2
     pveam update >/dev/null 2>&1 || true
 
     local arch
