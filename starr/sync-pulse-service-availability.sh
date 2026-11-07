@@ -3,7 +3,7 @@
 # One check per Servarr app listening on the LAN; FlareSolverr (127.0.0.1:8191)
 # is deliberately excluded — Pulse probes over the LAN and would false-alert.
 # Idempotent. Depends on the pulse container (explicit cross-package call).
-# Usage: sync-service-availability.sh [--dry-run] [--prune] [--prefix PREFIX]
+# Usage: sync-pulse-service-availability.sh [--dry-run] [--prune] [--prefix PREFIX]
 #        [--starr-name NAME] [--pulse-name NAME] [--poll-interval SEC]
 #        [--timeout-ms MS] [--failure-threshold N]
 # Env: PULSE_API_TOKEN or PULSE_API_TOKEN_FILE (Pulse API token with
