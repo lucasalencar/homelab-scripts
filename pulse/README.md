@@ -8,7 +8,7 @@ Container creation and in-container setup delegate to the [community-scripts Pul
 
 | Script | Description |
 |---|---|
-| `install.sh` | Creates the `pulse` LXC container via the community script. |
+| `install.sh` | Creates the `pulse` LXC container via the community script, then enables unprivileged ICMP probes (see `lib.sh`). |
 | `update.sh` | Re-runs the community script (updates Pulse in place). |
 
 ## Execution order
@@ -69,6 +69,7 @@ bash caddy/generate-caddyfile.sh
 ```bash
 pct exec $(pct list | grep -i -w pulse | awk "{print \$1}") -- systemctl is-active pulse
 pct exec $(pct list | grep -i -w pulse | awk "{print \$1}") -- curl -fsS http://127.0.0.1:7655/ -o /dev/null && echo OK
+pct exec $(pct list | grep -i -w pulse | awk "{print \$1}") -- su -s /bin/sh pulse -c 'ping -c1 -W2 127.0.0.1'
 ```
 
 ## Resources

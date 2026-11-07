@@ -46,6 +46,40 @@ COMMUNITY_CT="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main
 }
 
 # -------------------------------------------------------------------
+# pulse/lib.sh — unprivileged ICMP for the pulse user
+# -------------------------------------------------------------------
+
+@test "configure_pulse_unprivileged_ping writes sysctl conf and applies live" {
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; source "$REPO_ROOT/pulse/lib.sh"; configure_pulse_unprivileged_ping 110'
+  [ "$status" -eq 0 ]
+  /usr/bin/grep -q "99-pulse-unprivileged-ping.conf" "$MOCK_LOG"
+  /usr/bin/grep -q "sysctl" "$MOCK_LOG"
+}
+
+@test "configure_pulse_unprivileged_ping is idempotent when already configured" {
+  export MOCK_PCT_EXEC_SYSCTL_CONF="net.ipv4.ping_group_range = 0 991"
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; source "$REPO_ROOT/pulse/lib.sh"; configure_pulse_unprivileged_ping 110'
+  [ "$status" -eq 0 ]
+  run /usr/bin/grep -q "printf" "$MOCK_LOG"
+  [ "$status" -ne 0 ]
+}
+
+@test "configure_pulse_unprivileged_ping fails when pulse user is missing" {
+  export MOCK_PCT_EXEC_ID_G_pulse=""
+  run bash -c 'source "$REPO_ROOT/common/functions.sh"; source "$REPO_ROOT/pulse/lib.sh"; configure_pulse_unprivileged_ping 110'
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"pulse"* ]]
+}
+
+@test "pulse install enables unprivileged ICMP after container is ready" {
+  export MOCK_PCT_LIST=$'VMID       Status     Lock         Name\n107        running                 pulse'
+
+  run bash "$REPO_ROOT/pulse/install.sh" 2>&1
+  [ "$status" -eq 0 ]
+  /usr/bin/grep -q "ping_group_range" "$MOCK_LOG"
+}
+
+# -------------------------------------------------------------------
 # pulse/update.sh — re-runs the community script (in-place update)
 # -------------------------------------------------------------------
 

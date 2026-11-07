@@ -5,6 +5,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../common/functions.sh
 source "$SCRIPT_DIR/../common/functions.sh" || { echo "Error: failed to load common/functions.sh" >&2; exit 1; }
+# shellcheck source=lib.sh
+source "$SCRIPT_DIR/lib.sh" || { echo "Error: failed to load pulse/lib.sh" >&2; exit 1; }
 
 require_root
 
@@ -15,6 +17,8 @@ PULSE_INSTALL_CMD='bash -c "$(curl -fsSL https://raw.githubusercontent.com/commu
 container_id=$(ensure_container_installed "pulse" "$PULSE_INSTALL_CMD") || exit 1
 
 log_info "Identified Container ID: $container_id"
+
+configure_pulse_unprivileged_ping "$container_id" || exit 1
 
 container_ip=$(get_container_ip "$container_id")
 
