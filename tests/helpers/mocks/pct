@@ -222,6 +222,22 @@ EOF
     fi
     exit 0
     ;;
+  pull)
+    if [ "${MOCK_PCT_PULL_FAIL:-0}" = "1" ] || [ "${MOCK_PCT_FAIL:-0}" = "1" ]; then
+      echo "mock pct pull failed" >&2
+      exit 1
+    fi
+    dest="${4:-}"
+    if [ -n "$dest" ]; then
+      /bin/mkdir -p "$(/usr/bin/dirname "$dest")" 2>/dev/null || true
+      if [ "${MOCK_PCT_PULL_CONTENT+set}" = "set" ]; then
+        printf '%s\n' "$MOCK_PCT_PULL_CONTENT" > "$dest"
+      else
+        printf '# mock Caddyfile\nhttp://mock.marx.home {\n    reverse_proxy 10.0.0.5:80\n}\n' > "$dest"
+      fi
+    fi
+    exit 0
+    ;;
   *)
     # For any other pct subcommand, succeed
     if [ "${MOCK_PCT_FAIL:-0}" = "1" ]; then
