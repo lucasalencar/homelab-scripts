@@ -10,6 +10,7 @@ Container creation and in-container setup delegate to the [community-scripts Pul
 |---|---|
 | `install.sh` | Creates the `pulse` LXC container via the community script, then enables unprivileged ICMP probes (see `lib.sh`). |
 | `update.sh` | Re-runs the community script (updates Pulse in place). |
+| `sync-ping-availability.sh` | Creates/updates ICMP availability checks from running CTs/VMs. |
 
 ## Execution order
 
@@ -42,6 +43,16 @@ bash pulse/update.sh
 ```
 
 See `pulse/update.sh` for details.
+
+## Availability checks
+
+One ping target per running guest (see `pulse/sync-ping-availability.sh`):
+
+```bash
+export PULSE_API_TOKEN='<token>'  # Pulse Settings -> API Access (admin, settings:read/write)
+bash pulse/sync-ping-availability.sh --dry-run
+bash pulse/sync-ping-availability.sh --prune
+```
 
 ## Ports & Caddy
 
