@@ -69,6 +69,24 @@ _install_env() {
   grep -q "discard=on,ssd=1" "$MOCK_LOG"
 }
 
+@test "coding-vm install defaults to onboot 1 for autostart" {
+  _install_env
+  unset CODING_VM_ONBOOT
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  home-assistant       running    4096              32.00 12345'
+  run bash "$REPO_ROOT/coding-vm/install.sh"
+  [ "$status" -eq 0 ]
+  grep -q -- "--onboot 1" "$MOCK_LOG"
+}
+
+@test "coding-vm install respects onboot override" {
+  _install_env
+  export CODING_VM_ONBOOT="0"
+  export MOCK_QM_LIST=$'VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID\n200  home-assistant       running    4096              32.00 12345'
+  run bash "$REPO_ROOT/coding-vm/install.sh"
+  [ "$status" -eq 0 ]
+  grep -q -- "--onboot 0" "$MOCK_LOG"
+}
+
 @test "coding-vm install defaults to 16GB memory with balloon disabled" {
   _install_env
   unset CODING_VM_MEMORY_MB

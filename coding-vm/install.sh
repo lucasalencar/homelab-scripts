@@ -18,6 +18,7 @@ BRIDGE="${CODING_VM_BRIDGE:-}"
 IMAGE_URL="${CODING_VM_IMAGE_URL:-https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img}"
 IMAGE_DIR="${CODING_VM_IMAGE_DIR:-/var/lib/vz/template/iso}"
 WAIT_TIMEOUT="${CODING_VM_WAIT_TIMEOUT:-300}"
+ONBOOT="${CODING_VM_ONBOOT:-1}"
 MIN_IMAGE_BYTES="${CODING_VM_MIN_IMAGE_BYTES:-104857600}"
 GUI="${CODING_VM_GUI:-0}"
 
@@ -134,7 +135,7 @@ log_step "Creating VM $vmid ($VM_NAME)..."
 qm create "$vmid" --name "$VM_NAME" \
     --sockets 1 --cores "$CORES" --memory "$MEMORY_MB" --balloon "$BALLOON_MB" \
     --cpu host --machine q35 --ostype l26 --scsihw virtio-scsi-pci \
-    --net0 "virtio,bridge=$BRIDGE" --agent enabled=1 --onboot 0
+    --net0 "virtio,bridge=$BRIDGE" --agent enabled=1 --onboot "$ONBOOT"
 qm importdisk "$vmid" "$image_file" "$STORAGE"
 qm set "$vmid" --scsi0 "$STORAGE:vm-$vmid-disk-0,discard=on,ssd=1"
 qm set "$vmid" --ide2 "$STORAGE:cloudinit"
