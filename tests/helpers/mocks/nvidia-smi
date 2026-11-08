@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Mock for nvidia-smi — fails when MOCK_NVIDIA_SMI_FAIL=1.
+set -euo pipefail
+source "$(dirname "$0")/../mock_lib.sh"
+mock_log "nvidia-smi" "$@"
+
+if [ "${MOCK_NVIDIA_SMI_FAIL:-0}" = "1" ]; then
+  echo "NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver." >&2
+  exit 1
+fi
+if [ -n "${MOCK_NVIDIA_SMI_OUTPUT+set}" ]; then
+  echo -e "$MOCK_NVIDIA_SMI_OUTPUT"
+else
+  echo "GPU 0: NVIDIA GeForce RTX 4060 Ti (UUID: GPU-mock-0000)"
+fi
+exit 0

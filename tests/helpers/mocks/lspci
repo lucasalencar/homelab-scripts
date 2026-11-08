@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Mock for lspci — fixture PCI devices controlled via env vars.
+set -euo pipefail
+source "$(dirname "$0")/../mock_lib.sh"
+mock_log "lspci" "$@"
+
+_default_nn() {
+  cat <<'EOF'
+00:02.0 VGA compatible controller [0300]: Intel Corporation Raptor Lake-S UHD Graphics [8086:a782] (rev 04)
+01:00.0 VGA compatible controller [0300]: NVIDIA Corporation AD104 [GeForce RTX 4060 Ti] [10de:2788] (rev a1)
+01:00.1 Audio device [0403]: NVIDIA Corporation AD104 High Definition Audio Controller [10de:22bc] (rev a1)
+EOF
+}
+
+_default_nnk() {
+  cat <<'EOF'
+00:02.0 VGA compatible controller [0300]: Intel Corporation Raptor Lake-S UHD Graphics [8086:a782] (rev 04)
+	Kernel driver in use: i915
+	Kernel modules: i915
+01:00.0 VGA compatible controller [0300]: NVIDIA Corporation AD104 [GeForce RTX 4060 Ti] [10de:2788] (rev a1)
+	Subsystem: Micro-Star International Co., Ltd. [MSI] Device [1462:5121]
+	Kernel modules: nvidiafb, nouveau
+EOF
+}
+
+if [[ "$*" == *"-nnk"* ]]; then
+  if [ -n "${MOCK_LSPCI_NNK_OUTPUT+set}" ]; then
+    echo -e "$MOCK_LSPCI_NNK_OUTPUT"
+  else
+    _default_nnk
+  fi
+else
+  if [ -n "${MOCK_LSPCI_OUTPUT+set}" ]; then
+    echo -e "$MOCK_LSPCI_OUTPUT"
+  else
+    _default_nn
+  fi
+fi
+exit 0
