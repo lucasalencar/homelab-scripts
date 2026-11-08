@@ -48,4 +48,3 @@ fi
 log_success "Driver healthy. Sharing model:"
 log_info "  LXC: pass nodes per container (pct set <ctid> -dev0 /dev/nvidia0,...)."
 log_info "  VMs: no PCIe passthrough (card stays shared); consume over the network."
-log_info "  Jellyfin stays on Intel iGPU; reserve this card for compute."
