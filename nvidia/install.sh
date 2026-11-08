@@ -32,15 +32,19 @@ fi
 
 nvidia_ensure_non_free || exit 1
 
+nvidia_ensure_cuda_repo || exit 1
+
+nvidia_purge_legacy_stack
+
 log_step "Refreshing APT and installing the driver stack..."
 apt-get update
 # shellcheck disable=SC2046  # word-splitting the package list is intended
 apt-get install -y $(nvidia_driver_packages)
 
 conf=$(nvidia_modprobe_conf)
-log_step "Blacklisting nouveau ($conf)..."
+log_step "Blacklisting nouveau and nova ($conf)..."
 mkdir -p "$(dirname "$conf")"
-printf 'blacklist nouveau\noptions nouveau modeset=0\n' > "$conf"
+printf 'blacklist nouveau\noptions nouveau modeset=0\nblacklist nova\nblacklist nova_core\noptions nova modeset=0\noptions nova_core modeset=0\n' > "$conf"
 
 log_step "Rebuilding initramfs..."
 update-initramfs -u

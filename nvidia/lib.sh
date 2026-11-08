@@ -16,11 +16,56 @@ nvidia_debian_sources() { echo "${NVIDIA_DEBIAN_SOURCES:-/etc/apt/sources.list.d
 nvidia_modprobe_conf() { echo "${NVIDIA_MODPROBE_CONF:-/etc/modprobe.d/blacklist-nouveau-nvidia.conf}"; }
 nvidia_dev_dir() { echo "${NVIDIA_DEV_DIR:-/dev}"; }
 nvidia_uname_r() { echo "${NVIDIA_UNAME_R:-$(uname -r)}"; }
+nvidia_cuda_dist() { echo "${NVIDIA_CUDA_DIST:-debian13}"; }
+nvidia_cuda_sources() { echo "${NVIDIA_CUDA_SOURCES:-/etc/apt/sources.list.d/cuda-$(nvidia_cuda_dist)-x86_64.list}"; }
+nvidia_cuda_keyring() { echo "${NVIDIA_CUDA_KEYRING:-/usr/share/keyrings/cuda-archive-keyring.gpg}"; }
+nvidia_cuda_keyring_url() { echo "https://developer.download.nvidia.com/compute/cuda/repos/$(nvidia_cuda_dist)/x86_64/cuda-keyring_1.1-1_all.deb"; }
+nvidia_cuda_repo_line() { echo "deb [signed-by=$(nvidia_cuda_keyring)] https://developer.download.nvidia.com/compute/cuda/repos/$(nvidia_cuda_dist)/x86_64/ /"; }
 
-# Host driver + headers installed by install.sh / update.sh.
+# Headless compute stack + headers installed by install.sh / update.sh.
 # Usage: apt-get install -y $(nvidia_driver_packages)
 nvidia_driver_packages() {
-    echo "proxmox-headers-$(nvidia_uname_r) pve-headers nvidia-driver firmware-nvidia-graphics nvtop"
+    echo "proxmox-headers-$(nvidia_uname_r) pve-headers nvidia-driver-cuda nvidia-kernel-open-dkms firmware-nvidia-graphics nvtop"
+}
+
+# Enables the NVIDIA CUDA network repository (idempotent).
+# Usage: nvidia_ensure_cuda_repo || exit 1
+nvidia_ensure_cuda_repo() {
+    local src keyring line tmp
+    src=$(nvidia_cuda_sources)
+    keyring=$(nvidia_cuda_keyring)
+    line=$(nvidia_cuda_repo_line)
+    if [ -f "$src" ] && grep -qF "$line" "$src" 2>/dev/null && [ -f "$keyring" ]; then
+        log_info "CUDA repository already configured in $src"
+        return 0
+    fi
+    if [ ! -f "$keyring" ]; then
+        log_step "Installing CUDA keyring..."
+        tmp="$(mktemp)"
+        if ! curl -fsSL -o "$tmp" "$(nvidia_cuda_keyring_url)"; then
+            log_error "Failed to download CUDA keyring."
+            rm -f "$tmp"
+            return 1
+        fi
+        if ! dpkg -i "$tmp"; then
+            log_error "Failed to install CUDA keyring."
+            rm -f "$tmp"
+            return 1
+        fi
+        rm -f "$tmp"
+    fi
+    log_step "Enabling CUDA repository in $src..."
+    mkdir -p "$(dirname "$src")"
+    printf '%s\n' "$line" > "$src"
+}
+
+# Removes the legacy closed Debian stack (nvidia-driver / nvidia-kernel-dkms).
+# Safe to re-run: exact names never match the open compute stack.
+# Usage: nvidia_purge_legacy_stack
+nvidia_purge_legacy_stack() {
+    log_step "Removing legacy closed NVIDIA stack (if present)..."
+    apt-get remove --purge -y nvidia-driver nvidia-kernel-dkms || true
+    apt-get autoremove --purge -y || true
 }
 
 # Fails when not on a Proxmox host.

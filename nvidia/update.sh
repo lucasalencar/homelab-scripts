@@ -20,6 +20,9 @@ if ! nvidia_detect_gpu; then
 fi
 
 log_step "Refreshing APT and upgrading the driver stack..."
+nvidia_ensure_non_free || exit 1
+nvidia_ensure_cuda_repo || exit 1
+nvidia_purge_legacy_stack
 apt-get update
 # shellcheck disable=SC2046  # word-splitting the package list is intended
 apt-get install -y $(nvidia_driver_packages)

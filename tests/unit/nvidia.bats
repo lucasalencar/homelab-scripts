@@ -11,6 +11,9 @@ setup() {
   export NVIDIA_DEV_DIR="$MOCK_TMPDIR/dev"
   export NVIDIA_PVE_DIR="$MOCK_TMPDIR/pve"
   export NVIDIA_UNAME_R="7.0.14-17-pve"
+  export NVIDIA_CUDA_SOURCES="$MOCK_TMPDIR/cuda-debian13-x86_64.list"
+  export NVIDIA_CUDA_KEYRING="$MOCK_TMPDIR/cuda-archive-keyring.gpg"
+  export NVIDIA_CUDA_DIST="debian13"
   /bin/mkdir -p "$MOCK_TMPDIR/dev" "$MOCK_TMPDIR/pve"
   unset MOCK_LSPCI_OUTPUT
   unset MOCK_LSPCI_NNK_OUTPUT
@@ -22,6 +25,7 @@ teardown() {
   rm -rf "$MOCK_TMPDIR"
   unset NVIDIA_DEBIAN_SOURCES NVIDIA_MODPROBE_CONF NVIDIA_DEV_DIR
   unset NVIDIA_PVE_DIR NVIDIA_UNAME_R
+  unset NVIDIA_CUDA_SOURCES NVIDIA_CUDA_KEYRING NVIDIA_CUDA_DIST
 }
 
 _write_sources_fixture() {
@@ -66,7 +70,7 @@ _fake_dev_nodes() {
   [ "$status" -ne 0 ]
 }
 
-@test "nvidia install enables non-free and installs the driver stack" {
+@test "nvidia install enables non-free and installs the compute driver stack" {
   _nvidia_present
   export MOCK_NVIDIA_SMI_FAIL="1"
   _write_sources_fixture
@@ -75,14 +79,18 @@ _fake_dev_nodes() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"eboot"* ]]
   [[ "$output" == *"configure.sh"* ]]
-  /bin/grep -q "apt-get update" "$MOCK_LOG"
-  /bin/grep -q "nvidia-driver" "$MOCK_LOG"
+  /bin/grep -q "^apt-get update" "$MOCK_LOG"
+  /bin/grep -q "nvidia-driver-cuda" "$MOCK_LOG"
+  /bin/grep -q "nvidia-kernel-open-dkms" "$MOCK_LOG"
   /bin/grep -q "proxmox-headers-7.0.14-17-pve" "$MOCK_LOG"
   /bin/grep -q "pve-headers" "$MOCK_LOG"
   /bin/grep -q "firmware-nvidia-graphics" "$MOCK_LOG"
-  /bin/grep -q "update-initramfs -u" "$MOCK_LOG"
+  /bin/grep -q "^update-initramfs" "$MOCK_LOG"
   /bin/grep -Eq '(^|[[:space:]])non-free($|[[:space:]])' "$NVIDIA_DEBIAN_SOURCES"
   /bin/grep -q "blacklist nouveau" "$NVIDIA_MODPROBE_CONF"
+  /bin/grep -q "blacklist nova" "$NVIDIA_MODPROBE_CONF"
+  /bin/grep -q "developer.download.nvidia.com" "$NVIDIA_CUDA_SOURCES"
+  /bin/grep -q "debian13" "$NVIDIA_CUDA_SOURCES"
 }
 
 @test "nvidia install adds non-free idempotently" {
@@ -96,6 +104,56 @@ _fake_dev_nodes() {
   [ "$status" -eq 0 ]
   count=$(/bin/grep -o "non-free" "$NVIDIA_DEBIAN_SOURCES" | /usr/bin/wc -l | /usr/bin/tr -d ' ')
   [ "$count" -eq 2 ]
+}
+
+@test "nvidia install configures the CUDA repository idempotently" {
+  _nvidia_present
+  export MOCK_NVIDIA_SMI_FAIL="1"
+  _write_sources_fixture
+
+  run bash "$REPO_ROOT/nvidia/install.sh"
+  [ "$status" -eq 0 ]
+  run bash "$REPO_ROOT/nvidia/install.sh"
+  [ "$status" -eq 0 ]
+  count=$(/bin/grep -c "developer.download.nvidia.com" "$NVIDIA_CUDA_SOURCES")
+  [ "$count" -eq 1 ]
+}
+
+@test "nvidia install fetches the CUDA keyring when missing" {
+  _nvidia_present
+  export MOCK_NVIDIA_SMI_FAIL="1"
+  _write_sources_fixture
+
+  run bash "$REPO_ROOT/nvidia/install.sh"
+  [ "$status" -eq 0 ]
+  /bin/grep -q "^curl.*cuda-keyring" "$MOCK_LOG"
+  /bin/grep -q "^dpkg -i" "$MOCK_LOG"
+}
+
+@test "nvidia install skips the keyring download when already configured" {
+  _nvidia_present
+  export MOCK_NVIDIA_SMI_FAIL="1"
+  _write_sources_fixture
+  printf 'deb [signed-by=%s] https://developer.download.nvidia.com/compute/cuda/repos/debian13/x86_64/ /\n' "$NVIDIA_CUDA_KEYRING" > "$NVIDIA_CUDA_SOURCES"
+  /usr/bin/touch "$NVIDIA_CUDA_KEYRING"
+
+  run bash "$REPO_ROOT/nvidia/install.sh"
+  [ "$status" -eq 0 ]
+  run /bin/grep "^curl" "$MOCK_LOG"
+  [ "$status" -ne 0 ]
+  run /bin/grep "^dpkg" "$MOCK_LOG"
+  [ "$status" -ne 0 ]
+}
+
+@test "nvidia install purges the legacy closed stack before installing" {
+  _nvidia_present
+  export MOCK_NVIDIA_SMI_FAIL="1"
+  _write_sources_fixture
+
+  run bash "$REPO_ROOT/nvidia/install.sh"
+  [ "$status" -eq 0 ]
+  /bin/grep -q "^apt-get remove.*nvidia-kernel-dkms" "$MOCK_LOG"
+  /bin/grep -q "nvidia-kernel-open-dkms" "$MOCK_LOG"
 }
 
 @test "nvidia install skips apt when the driver already works" {
@@ -158,7 +216,7 @@ _fake_dev_nodes() {
 # nvidia/update.sh
 # -------------------------------------------------------------------
 
-@test "nvidia update refreshes headers and driver and verifies" {
+@test "nvidia update refreshes headers and open driver and verifies" {
   _nvidia_present
   _driver_in_use
   _fake_dev_nodes
@@ -166,10 +224,12 @@ _fake_dev_nodes() {
 
   run bash "$REPO_ROOT/nvidia/update.sh"
   [ "$status" -eq 0 ]
-  /bin/grep -q "apt-get update" "$MOCK_LOG"
-  /bin/grep -q "nvidia-driver" "$MOCK_LOG"
+  /bin/grep -q "^apt-get update" "$MOCK_LOG"
+  /bin/grep -q "nvidia-driver-cuda" "$MOCK_LOG"
+  /bin/grep -q "nvidia-kernel-open-dkms" "$MOCK_LOG"
   /bin/grep -q "proxmox-headers-7.0.14-17-pve" "$MOCK_LOG"
   /bin/grep -q "nvidia-smi" "$MOCK_LOG"
+  /bin/grep -q "developer.download.nvidia.com" "$NVIDIA_CUDA_SOURCES"
 }
 
 # -------------------------------------------------------------------
@@ -185,6 +245,18 @@ _fake_dev_nodes() {
   [ "$status" -ne 0 ]
 }
 
+@test "nvidia lib exposes CUDA repo helpers and compute packages" {
+  run bash -c 'source "$REPO_ROOT/nvidia/lib.sh"; nvidia_driver_packages'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"nvidia-driver-cuda"* ]]
+  [[ "$output" == *"nvidia-kernel-open-dkms"* ]]
+  run bash -c 'source "$REPO_ROOT/nvidia/lib.sh"; nvidia_cuda_repo_line'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"debian13"* ]]
+  [[ "$output" == *"developer.download.nvidia.com"* ]]
+  [[ "$output" == *"cuda-archive-keyring.gpg"* ]]
+}
+
 # -------------------------------------------------------------------
 # nvidia/README.md — operator contract
 # -------------------------------------------------------------------
@@ -196,4 +268,6 @@ _fake_dev_nodes() {
   /bin/grep -q "LXC" "$REPO_ROOT/nvidia/README.md"
   /bin/grep -q "Caddy" "$REPO_ROOT/nvidia/README.md"
   /bin/grep -q "NVIDIA_DEBIAN_SOURCES" "$REPO_ROOT/nvidia/README.md"
+  /bin/grep -q "CUDA" "$REPO_ROOT/nvidia/README.md"
+  /bin/grep -q "nvidia-driver-cuda" "$REPO_ROOT/nvidia/README.md"
 }
